@@ -2,9 +2,6 @@
 #include <string.h>
 #include <stdbool.h>
 #include <stdlib.h>
-#define ANSI_COLOR_GREEN   "\x1b[32m"
-#define ANSI_COLOR_RED     "\x1b[31m"
-#define ANSI_COLOR_RESET   "\x1b[0m"
 
 struct car {
     int fuel, count;
@@ -20,66 +17,89 @@ struct station {
     struct car *cars;
 };
 
-
-struct road {
+struct stop {
     int distance;
-    struct road *next;
+    int maxRange;
 };
 
-void addStation();
+struct route {
+    int size;
+    struct stop *stops;
+};
 
-void removeStation();
+void add_station();
 
-void addCarToStation();
+void remove_station();
 
-void removeCarFromStation();
+void add_car_to_station();
 
-void planRoute();
+void remove_car_from_station();
 
-void prepearBuffer();
-struct car* new_car(int);
-void freeCars(struct car *);
-void addCar(struct car **, int);
-void freeStation(struct station **);
-bool insertStation(struct station *);
-struct station *findStation(int);
-struct car *findMinimumCar(struct car *);
-struct route *allBetweenStartAndEnd(int , int );
-struct car *removeOneCar(struct car *, int);
-struct station *removeNode(struct station *, int);
-struct station *findMinimumStation(struct station *);
-void printHighway(struct station *);
+void plan_route();
+
+void prepare_buffer();
+
+struct car *new_car(int);
+
+void free_cars(struct car *);
+
+void add_car(struct car **, int);
+
+void free_station(struct station **);
+
+bool insert_station(struct station *);
+
+struct station *find_station(int);
+
+struct car *find_min_car(struct car *);
+
+struct stop *all_between(int, int);
+
+struct car *remove_one_car(struct car *, int);
+
+struct station *remove_node(struct station *, int);
+
+struct station *find_min_station(struct station *);
+
+void print_highway(struct station *station);
+
 void printCars(struct car *);
 
 
-struct station *highway = NULL;
+struct station *highway;
+struct route *route;
+
+
 int main() {
+    route = NULL;
+    highway = NULL;
+
     char command[20];
-    while (fscanf(stdin, "%s", command) != EOF && strcmp(command, "\n") != 0){
+    while (fscanf(stdin, "%s", command) != EOF && strcmp(command, "\n") != 0) {
         if (strcmp(command, "aggiungi-stazione") == 0)
-            addStation();
+            add_station();
         else if (strcmp(command, "demolisci-stazione") == 0)
-            removeStation();
+            remove_station();
         else if (strcmp(command, "aggiungi-auto") == 0)
-            addCarToStation();
+            add_car_to_station();
         else if (strcmp(command, "rottama-auto") == 0)
-            removeCarFromStation();
+            remove_car_from_station();
         else if (strcmp(command, "pianifica-percorso") == 0)
-            planRoute();
+            plan_route();
         else if (strcmp(command, "print") == 0)
-            printHighway(highway);
-        prepearBuffer();
+            print_highway(highway);
+        prepare_buffer();
         printf("\n");
     }
     return 0;
 }
 
-void prepearBuffer() {
+void prepare_buffer() {
     char c;
     while ((c = getchar()) != '\n' && c != EOF);
 }
 
-void addStation() {
+void add_station() {
     int distance, sizePark;
     fscanf(stdin, " %d %d", &distance, &sizePark);
 
@@ -90,14 +110,14 @@ void addStation() {
     newStation->cars = NULL;
     newStation->right = NULL;
     newStation->left = NULL;
-    if (insertStation(newStation)) {
+    if (insert_station(newStation)) {
         //add cars
         for (int i = 0; i < sizePark; i++) {
             int fuel;
             scanf("%d", &fuel);
             if (fuel > newStation->maxRange)
                 newStation->maxRange = fuel;
-            addCar(&newStation->cars, fuel);
+            add_car(&newStation->cars, fuel);
         }
         printf("aggiunta");
     } else {
@@ -105,7 +125,7 @@ void addStation() {
     }
 }
 
-bool insertStation(struct station *newStation) {
+bool insert_station(struct station *newStation) {
     if (highway == NULL) {
         highway = newStation;
         return true;
@@ -132,7 +152,7 @@ bool insertStation(struct station *newStation) {
     return false;
 }
 
-void addCar(struct car **cars, int fuel) {
+void add_car(struct car **cars, int fuel) {
     if (*cars == NULL) {
         *cars = new_car(fuel);
         return;
@@ -160,7 +180,7 @@ void addCar(struct car **cars, int fuel) {
 }
 
 
-struct car* new_car(int fuel){
+struct car *new_car(int fuel) {
     struct car *newCar = (struct car *) malloc(sizeof(struct car));
     newCar->fuel = fuel;
     newCar->count = 1;
@@ -169,79 +189,79 @@ struct car* new_car(int fuel){
     return newCar;
 }
 
-void removeStation() {
+void remove_station() {
     int distance;
     fscanf(stdin, "%d", &distance);
-    highway = removeNode(highway, distance);
+    highway = remove_node(highway, distance);
 }
 
-struct station *findMinimumStation(struct station *root){
+struct station *find_min_station(struct station *root) {
     if (root == NULL)
         return NULL;
     else if (root->left != NULL)
-        return findMinimumStation(root->left);
+        return find_min_station(root->left);
     return root;
 }
 
-struct station *removeNode(struct station *node, int key) {
+struct station *remove_node(struct station *node, int key) {
     if (node == NULL) {
         printf("non demolita");
         return NULL;
     } else if (key < node->distance) {
-        node->left = removeNode(node->left, key);
+        node->left = remove_node(node->left, key);
     } else if (key > node->distance) {
-        node->right = removeNode(node->right, key);
+        node->right = remove_node(node->right, key);
     } else {
         // Found the node to be deleted
 
         // Case 1: No child or only one child
         if (node->left == NULL) {
             struct station *temp = node->right;
-            freeStation(&node);
+            free_station(&node);
             printf("demolita");
             return temp;
         } else if (node->right == NULL) {
             struct station *temp = node->left;
-            freeStation(&node);
+            free_station(&node);
             printf("demolita");
             return temp;
         }
 
         // Case 2: Two children
-        struct station *minRightSubtree = findMinimumStation(node->right);
+        struct station *minRightSubtree = find_min_station(node->right);
         node->distance = minRightSubtree->distance;
-        node->right = removeNode(node->right, minRightSubtree->distance);
+        node->right = remove_node(node->right, minRightSubtree->distance);
     }
     return node;
 }
 
-void freeStation(struct station **station) {
+void free_station(struct station **station) {
     if (station == NULL)
         return;
 
-    freeCars((*station)->cars);
+    free_cars((*station)->cars);
     free(*station);
 }
 
-void freeCars(struct car *car) {
+void free_cars(struct car *car) {
     if (car == NULL)
         return;
 
-    freeCars(car->left);
-    freeCars(car->right);
+    free_cars(car->left);
+    free_cars(car->right);
     free(car);
 }
 
-void addCarToStation() {
+void add_car_to_station() {
     int distance, fuel;
     fscanf(stdin, "%d %d", &distance, &fuel);
-    struct station *station = findStation(distance);
+    struct station *station = find_station(distance);
 
     //I can add the car to the station
     if (station != NULL) {
         if (fuel > station->maxRange)
             station->maxRange = fuel;
-        addCar(&station->cars, fuel);
+        add_car(&station->cars, fuel);
         printf("aggiunta");
 
         // I can't add the car because there is no station
@@ -264,35 +284,35 @@ struct station *findStation(int distance) {
     return NULL;
 }
 
-void removeCarFromStation() {
+void remove_car_from_station() {
     int distance, fuel;
     fscanf(stdin, " %d %d", &distance, &fuel);
     struct station *station = findStation(distance);
     if (station != NULL) { //I can remove the car from the station
-        station->cars = removeOneCar(station->cars, fuel);
+        station->cars = remove_one_car(station->cars, fuel);
     } else { // I can't remove the car because there is no station
         printf("non rottamata");
         return;
     }
 }
 
-struct car *findMinimumCar(struct car *car) {
+struct car *find_min_car(struct car *car) {
     if (car == NULL) {
         return NULL;
     } else if (car->left != NULL) {
-        return findMinimumCar(car->left);
+        return find_min_car(car->left);
     }
     return car;
 }
 
-struct car *removeOneCar(struct car *cars, int key) {
+struct car *remove_one_car(struct car *cars, int key) {
     if (cars == NULL) {
         printf("non rottamata");
         return NULL;
     } else if (key < cars->fuel) {
-        cars->left = removeOneCar(cars->left, key);
+        cars->left = remove_one_car(cars->left, key);
     } else if (key > cars->fuel) {
-        cars->right = removeOneCar(cars->right, key);
+        cars->right = remove_one_car(cars->right, key);
     } else {
         // Found the node to be deleted
 
@@ -317,39 +337,39 @@ struct car *removeOneCar(struct car *cars, int key) {
         }
 
         // Case 2: Two children
-        struct car *minRightSubtree = findMinimumCar(cars->right);
+        struct car *minRightSubtree = find_min_car(cars->right);
         cars->fuel = minRightSubtree->fuel;
         cars->count = minRightSubtree->count;
-        cars->right = removeOneCar(cars->right, minRightSubtree->fuel);
+        cars->right = remove_one_car(cars->right, minRightSubtree->fuel);
         printf("rottamata");
     }
     return cars;
 }
 
-void printCars(struct car *node);
 
-void planRoute() {
+void plan_route() {
     int start, end;
     fscanf(stdin, " %d %d", &start, &end);
-    struct route *possible_stop = allBetweenStartAndEnd(start, end);
+    all_between(start, end);
 }
 
-struct route *allBetweenStartAndEnd(int start, int end) {
+struct stop *all_between(int start, int end) {
+    route->size = 0;
     return NULL;
 }
 
-void printHighway(struct station *station) {
+void print_highway(struct station *station) {
     if (station == NULL) {
         return;
     }
-    if(station->left != NULL)
-        printHighway(station->left);
+    if (station->left != NULL)
+        print_highway(station->left);
     printf("stazione a distanza: %d\n", station->distance);
-    if(station->cars != NULL)
-            printCars(station->cars);
+    if (station->cars != NULL)
+        printCars(station->cars);
     else printf("\tnessuna auto\n");
-    if(station->right != NULL)
-        printHighway(station->right);
+    if (station->right != NULL)
+        print_highway(station->right);
     return;
 }
 
@@ -357,12 +377,12 @@ void printCars(struct car *node) {
     if (node == NULL) {
         return;
     }
-    if(node->left != NULL)
+    if (node->left != NULL)
         printCars(node->left);
     printf("\t-autonomia: %d ", node->fuel);
     printf("\t-numero in loco: %d ", node->count);
     printf("\n");
-    if(node->right != NULL)
+    if (node->right != NULL)
         printCars(node->right);
     return;
 }
