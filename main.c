@@ -1,342 +1,213 @@
 #include <stdio.h>
-#include <stdlib.h>
+#include <stdilib.h>
 #include <string.h>
 
-#define CAR 500
 #define STATION 10000
-
+#define BUFFER 512
 #define F1 113
 #define F2 127
-
 #define DENSITY 0.75
 #define UP 1.75
 
-//to save the cars info
-struct car {
-    int data;
-    int count;
+struct car{
+  int range;
+  int count;
+  struct car *right, *left;
 };
 
-struct parking {
-    int last;
-    int table_size;
-    int heap_size;
-    struct car *cars_table;
-    struct car *max_heap;
-    //se aggiorno un valore dentro la tabella che mi indica la posizione della macchina nell'heap ho un inserimento e rimozione sempre in log(n) e non in n
-    //ne vale la pena?
-
+struct station {
+  int key;
+  int max;
+  int index;
+  struct car *cars;
+  struct station *next, *prec;
 };
 
-//cell to use in the hash table
-struct cell {
-    int data;
-    int max; //nel caso di un max heap non serve
-    struct parking parking;
+struct buffer{
+  unsigned int *arr;
+  struct load;
 };
 
-struct table {
-    int size;
-    struct cell *cells;
+struct mastro{
+  int size;
+  int load;
+  struct station **table;
 };
 
-struct table table;
-
-struct page {
-    int data;
-    int index;
-};
-
-//to plan the route
-struct mastro {
-    int last;
-    int size;
-    struct page *pages;
-};
-
-struct mastro mastro;
-
-void insert_car();
-
-void insert_station();
-
-void remove_car();
-
-void remove_station();
-
-void plan_route();
-
-void print();
-
-void prepare_buffer();
-
-int find(int);
+void aggiungi_stazione();
+void demolisci_stazione();
+void aggiungi_auto();
+void rottama_auto();
+void calcola_percorso();
 
 unsigned int hash(int);
-
-unsigned int quadratic_prob(int, int);
-
+unsigned int search_alg(int, int);
+void clear_buffer();
 void add_to_table(int, int);
+void add_to_buffer(int, int);
 
-void add_to_array(int, int);
+struct buffer buffer;
+struct station tail;
+struct mastro mastro;
 
-void check_table();
+int main (){
+  char command[18];
+  buffer.arr = (int *) calloc (sizeof(int ) * BUFFER);
+  buffer.load = 0;
 
-void check_mastro();
+  mastro.size = STATION;
+  mastro.load = 0;
+  mastro.table = (struct station **) calloc (sizeof(struct station *) * STATION);
 
-void check_parking(int);
-
-void add_car_to_station(int, int);
-
-int binary_mastro(int, int, int);
-
-int binary_cars(int, int, int, int);
-
-int main() {
-    table.size = STATION;
-    table.cells = (struct cell *) malloc(table.size * sizeof(struct cell));
-    memset(table.cells, -1, table.size * sizeof(struct cell));
-
-    mastro.size = STATION;
-    mastro.last = 0;
-    mastro.pages = (struct page *) malloc(mastro.size * sizeof(struct page));
-
-    char com[20];
-    while (fscanf(stdin, "%s", com) != EOF) {
-        switch (com[0]) {
-            case 'a':
-                switch (com[9]) {
-                    case 'a':
-                        insert_car();
-                        break;
-                    default:
-                        insert_station();
-                        break;
-                }
-                break;
-            case 'r':
-                remove_car();
-                break;
-            case 'p':
-                plan_route();
-                break;
-            case 'd':
-                remove_station();
-                break;
-            default:
-                print();
-                break;
-        }
-        printf("\n");
-        prepare_buffer();
+  while (fscanf(stdin, "%s", command) != EOF){
+    switch(command[12]){
+      case 'z': aggiungi_stazione();
+        break;
+      case 'a': demolisci_stazione();
+        break;
+      case 'o': aggiungi_auto();
+        break;
+      case '\0': rottama_auto();
+        break;
+      case 'r': calcola_percorso();
+        break;
+      default: print_status();
     }
-    return 0;
+    clear_buffer();
+  }
+  return 0;
 }
 
-void prepare_buffer() {
-    while (getchar() != '\n');
+void clear_buffer(){
+  while (getchar() != '\n');
 }
 
-void insert_station() {
-    int data, count, index;
-    fscanf(stdin, "%d", &data);
-    index = find(data);
-    if (table.cells[index].data == data) {
-        printf("non aggiunta");
-        return;
-    }
-    add_to_table(data, index);
-    add_to_array(data, index);
-    fscanf(stdin, "%d", &count);
-    for (int i = 0; i < count; i++) {
-        fscanf(stdin, "%d", &data);
-        add_car_to_station(index, data);
-        if (data > table.cells[index].max) {
-            table.cells[index].max = data;
-        }
-    }
-    printf("aggiunta");
-}
+void aggiungi_stazione(){
+  int key, size, index;
+  fscanf(stdin, "%d", &key);
+  index = find(key);
 
-void insert_car() {
-    int data, index;
-    fscanf(stdin, "%d", &data);
-    index = find(data);
-    if (table.cells[index].data != data) {
-        printf("non aggiunta");
-        return;
-    }
-    fscanf(stdin, "%d", &data);
-    add_car_to_station(index, data);
-    printf("aggiunta");
+  if(mastro.table[index])] != NULL){
+    printf("non aggiunta\n");
     return;
+  }
+  
+  add_to_table(key, index);
+  add_to_buffer(index);
+
+  fscanf(stdin, "%d", &size);
+  for(int i = 0; i < size; i++){
+    fscanf(stdin, "%d", &key);
+    insert_car(index, key);
+    if(mastro.table[index]->max < key)
+      mastro.table[index]->max = key;
+  }
+
+  printf("aggiunta\n");
 }
 
-void remove_car() {
-    int data, index;
-    fscanf(stdin, "%d", &data);
-    index = find(data);
-    if (table.cells[index].data != data) {
-        printf("non presente");
-        return;
-    }
-
+void add_to_table(int key, int index){
+  struct station *elem = (struct station *) malloc (sizeof(struct station));
+  elem->key = key;
+  elem->max = -1;
+  elem->cars = NULL;
+  elem->next = NULL;
+  elem->prec = NULL;
+  
+  mastro.table[index] = elem;
 }
 
-void remove_station() {
+void add_to_buffer(int index){
+  buffer.arr[buffer.load] = index;
+  mastro.table[index]->index = buffer.load;
+  
+  if(buffer.load == 0){
+    buffer.load++;
+    return;
+  }
 
+  insert_heapfy(buffer.load);
+  if (buffer.load++ == BUFFER)
+    set_road();
 }
 
-void plan_route() {
-
-}
-
-int find(int data) {
-    unsigned int index = hash(data);
-    int attempt = 0;
-    while (table.cells[index].data != data && table.cells[index].data != -1 && attempt < table.size) {
-        attempt++;
-        index = quadratic_prob(index, attempt);
-    }
+int find (int key){
+  unsigned int index = hash(key);
+  if (mastro.table[index] == NULL)
     return index;
+
+  for(int attempt = 1; mastro.table[index] != NULL &&  mastro.table[index]->key != key && attempt < mastro.size; attempt ++)
+    index = search_alg(index, attempt);
+
+  return index;
 }
 
-unsigned int hash(int key) {
-    const unsigned int seed = 42;
-    const unsigned int m = 0x5bd1e995;
-    const int r = 24;
+unsigned int hash(int key){
+  const unsigned int seed = 42;
+  const unsigned int m = 0x5bd1e995;
+  const int r = 24;
 
-    unsigned int h = seed ^ sizeof(key);
-    key *= m;
-    key ^= key >> r;
-    key *= m;
-    h *= m;
-    h ^= key;
+  unsigned int h = seed ^ sizeof(key);
+  key *= m;
+  key ^= key >> r;
+  key *= m;
+  h*= m;
+  h ^= key;
 
-    return h % table.size;
+  return h % mastro.size;
 }
 
-unsigned int quadratic_prob(int index, int attempt) {
-    return (index + attempt * F1 + attempt * attempt * F2) % table.size;
+unsigned int search_alg (int index, int attempt){
+  return (index + attempt * F1 + attempt * attempt * F2) % mastro.size;
 }
 
-void add_to_table(int data, int index) {
-    table.cells[index].data = data;
-    table.cells[index].max = 0;
-    table.cells[index].parking.last = 0;
-    table.cells[index].parking.size = CAR;
-    table.cells[index].parking.cars = (struct car *) malloc(table.cells[index].parking.size * sizeof(struct car));
+int remove_max(){
+  if(buffer.load )
+  int max = buffer.arr[0];
 
-    check_table();
+  swap_elem(0, buffer.load--);
+
+  delete_heapfy(0);
+
+  return max;
 }
 
-void check_table() {
-    if (((double) (mastro.last + 1) / (double) table.size) > DENSITY) {
-        table.cells = (struct cell *) realloc(table.cells, table.size * UP * sizeof(struct cell));
-        memset(table.cells + table.size, -1, table.size * (UP - 1) * sizeof(struct cell));
-        table.size *= UP;
-    }
+void remove_pos(int pos){
+  buffer.arr[pos] = 
 }
 
-void add_to_array(int data, int index) {
-    if (mastro.last == 0) {
-        mastro.pages[mastro.last].data = data;
-        mastro.pages[mastro.last].index = index;
-        mastro.last++;
-        check_mastro();
-        return;
-    }
-    int pos = binary_mastro(data, 0, mastro.last);
-    memcpy(mastro.pages + pos + 1, mastro.pages + pos, (mastro.last - pos) * sizeof(struct page));
-    mastro.pages[pos].data = data;
-    mastro.pages[pos].index = index;
-    mastro.last++;
-    check_mastro();
+void insert_heapfy(int pos){
+  int parent = (pos-1)/2;
+
+  if (! mastro.table[buffer.arr[parent]->key < mastro.table[buffer.arr[pos]]-> key)
     return;
+
+  swap_elem(parent, pos);
+  insert_heapfy(parent);
 }
 
-int binary_mastro(int data, int start, int end) {
-    int low = start;
-    int high = end - 1;
+void delete_heapfy(int pos){
+  int left = pos * 2 + 1;
+  int right = pos * 2 + 2;
+  int max = pos;
 
-    while (low <= high) {
-        int mid = (low + high) / 2;
+  if (left < buffer.load && mastro.table[buffer.arr[left]]->key > mastro.table[buffer.arr[max]]->key)
+    max = left;
+  if (right < buffer.load && mastro.table[buffer.arr[right]]->key > mastro.table[buffer.arr[max]]->key)
+    max = right;
 
-        if (data < mastro.pages[mid].data) {
-            high = mid - 1;
-        } else if (data > mastro.pages[mid].data) {
-            low = mid + 1;
-        } else {
-            return mid;
-        }
-    }
-
-    return low;
-}
-
-void check_mastro() {
-    if (mastro.last == mastro.size) {
-        mastro.size *= UP;
-        mastro.pages = (struct page *) realloc(mastro.pages, mastro.size * sizeof(struct page));
-    }
-}
-
-void add_car_to_station(int index, int data) {
-    if (table.cells[index].parking.last == 0) {
-        table.cells[index].parking.cars[table.cells[index].parking.last].data = data;
-        table.cells[index].parking.cars[table.cells[index].parking.last].count = 1;
-        table.cells[index].parking.last++;
-        check_parking(index);
-        return;
-    }
-    int pos = binary_cars(index, data, 0, table.cells[index].parking.last);
-    if (table.cells[index].parking.cars[pos].data == data) {
-        table.cells[index].parking.cars[pos].count++;
-        return;
-    }
-    memcpy(table.cells[index].parking.cars + pos + 1, table.cells[index].parking.cars + pos,
-           (table.cells[index].parking.last - pos) * sizeof(struct car));
-    table.cells[index].parking.cars[pos].data = data;
-    table.cells[index].parking.cars[pos].count = 1;
-    table.cells[index].parking.last++;
-    check_parking(index);
+  if (max == pos)
     return;
+
+  swap_elem(max, pos);
+  max_heapfy(max);
 }
 
-int binary_cars(int index, int data, int start, int end) {
-    int low = start;
-    int high = end - 1;
+void swap_elem(int temp1, int temp2){
+  mastro.table[buffer.arr[temp1]]->index = temp2;
+  mastro.table[buffer.arr[temp2]]->index = temp1;
 
-    while (low <= high) {
-        int mid = (low + high) / 2;
-
-        if (data < table.cells[index].parking.cars[mid].data) {
-            high = mid - 1;
-        } else if (data > table.cells[index].parking.cars[mid].data) {
-            low = mid + 1;
-        } else {
-            return mid;
-        }
-    }
-
-    return low;
-}
-
-void check_parking(int index) {
-    if (table.cells[index].parking.last == table.cells[index].parking.size) {
-        table.cells[index].parking.size *= UP;
-        table.cells[index].parking.cars = (struct car *) realloc(table.cells[index].parking.cars,
-                                                                 table.cells[index].parking.size * sizeof(struct car));
-    }
-}
-
-void print() {
-    for (int i = 0; i < mastro.last; i++) {
-        printf("- Data: %d\tRange: %d\tIndex: %d\n", table.cells[mastro.pages[i].index].data,
-               table.cells[mastro.pages[i].index].max, mastro.pages[i].index);
-        for (int j = 0; j < table.cells[mastro.pages[i].index].parking.last; j++) {
-            printf("\t%d ^ %d\n", table.cells[mastro.pages[i].index].parking.cars[j].data,
-                   table.cells[mastro.pages[i].index].parking.cars[j].count);
-        }
-    }
+  int index = buffer.arr[temp1];
+  buffer.arr[temp1] = buffer.arr[temp2];
+  buffer.arr[temp2] = buffer.arr[temp1];
 }
