@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include <stdilib.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define STATION 10000
@@ -25,7 +25,7 @@ struct station {
 
 struct buffer{
   unsigned int *arr;
-  struct load;
+  int load;
 };
 
 struct mastro{
@@ -44,7 +44,7 @@ unsigned int hash(int);
 unsigned int search_alg(int, int);
 void clear_buffer();
 void add_to_table(int, int);
-void add_to_buffer(int, int);
+void add_to_buffer(int);
 
 struct buffer buffer;
 struct station tail;
@@ -52,12 +52,12 @@ struct mastro mastro;
 
 int main (){
   char command[18];
-  buffer.arr = (int *) calloc (sizeof(int ) * BUFFER);
+  buffer.arr = (int *) malloc (sizeof(int) * BUFFER);
   buffer.load = 0;
 
   mastro.size = STATION;
   mastro.load = 0;
-  mastro.table = (struct station **) calloc (sizeof(struct station *) * STATION);
+  mastro.table = (struct station **) calloc (STATION, sizeof(struct station *));
 
   while (fscanf(stdin, "%s", command) != EOF){
     switch(command[12]){
@@ -87,7 +87,7 @@ void aggiungi_stazione(){
   fscanf(stdin, "%d", &key);
   index = find(key);
 
-  if(mastro.table[index])] != NULL){
+  if(mastro.table[index] != NULL){
     printf("non aggiunta\n");
     return;
   }
@@ -162,7 +162,6 @@ unsigned int search_alg (int index, int attempt){
 }
 
 int remove_max(){
-  if(buffer.load )
   int max = buffer.arr[0];
 
   swap_elem(0, buffer.load--);
@@ -173,13 +172,13 @@ int remove_max(){
 }
 
 void remove_pos(int pos){
-  buffer.arr[pos] = 
+  int a;
 }
 
 void insert_heapfy(int pos){
   int parent = (pos-1)/2;
 
-  if (! mastro.table[buffer.arr[parent]->key < mastro.table[buffer.arr[pos]]-> key)
+  if (! mastro.table[buffer.arr[parent]]->key < mastro.table[buffer.arr[pos]]-> key)
     return;
 
   swap_elem(parent, pos);
