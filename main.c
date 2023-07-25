@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define STATION 10000
+#define STATIONS 10000
 #define BUFFER 512
 #define F1 113
 #define F2 127
@@ -58,6 +58,11 @@ void free_binary_tree(struct car *);
 void realloc_table();
 void remove_car(int, struct car*, struct car*);
 int reload_max(int);
+void left_to_right(int, int, int);
+void right_to_left(int, int, int);
+
+void print_all();
+void print_station(struct station *);
 
 struct buffer buffer;
 struct mastro mastro;
@@ -65,16 +70,21 @@ struct station *tail;
 
 
 int main (){
-  char command[18];
+  char command[20];
+
   tail = NULL;
 
-  buffer.arr = (int *) malloc (sizeof(int) * BUFFER);
   buffer.load = 0;
+  buffer.arr = (int *) malloc (sizeof(int) * BUFFER);
+  if(buffer.arr == NULL)
+    return -1;
 
-  mastro.size = STATION;
+  mastro.size = STATIONS;
   mastro.load = 0;
-  mastro.table = (struct station **) calloc (STATION, sizeof(struct station *));
-
+  mastro.table = (struct station **) calloc (STATIONS, sizeof(struct station *));
+  if(mastro.table == NULL)
+    return -2;
+    
   while (fscanf(stdin, "%s", command) != EOF){
     switch(command[12]){
       case 'z': aggiungi_stazione();
@@ -87,7 +97,7 @@ int main (){
         break;
       case 'r': calcola_percorso();
         break;
-      //default: print_status();
+      default: print_all();
     }
     clear_buffer();
   }
@@ -114,7 +124,7 @@ void aggiungi_stazione(){
   fscanf(stdin, "%d", &key);
   index = find(key);
 
-  if(mastro.table[index] != NULL || mastro.table[index]->key == key){
+  if(mastro.table[index] != NULL && mastro.table[index]->key == key){
     printf("non aggiunta\n");
     return;
   }
@@ -171,6 +181,8 @@ void aggiungi_auto(){
   int key;
   fscanf(stdin, "%d", &key);
   insert_car(index, key);
+  if(mastro.table[index]->max < key)
+    mastro.table[index]->max = key;
   printf("aggiunta\n");
 }
 
@@ -221,11 +233,11 @@ void calcola_percorso(){
   int start, end;
   fscanf(stdin, "%d %d", &start, &end);
   
-  if(start == end && find(start) != NULL){
+  if(start == end && mastro.table[find(start)] != NULL){
     printf("%d\n", start);
     return;
   }
-  
+
   int km = abs(start - end);
   start = find(start);
   end = find(end);
@@ -326,11 +338,6 @@ void realloc_table(){
 void add_to_buffer(int index){
   buffer.arr[buffer.load] = index;
   mastro.table[index]->index = buffer.load;
-  
-  if(buffer.load == 0){
-    buffer.load++;
-    return;
-  }
 
   insert_heapfy(buffer.load);
   
@@ -352,9 +359,11 @@ void remove_pos(int pos){
 }
 
 void insert_heapfy(int pos){
+  if(pos == 0)
+    return;
   int parent = (pos-1)/2;
 
-  if (! mastro.table[buffer.arr[parent]]->key < mastro.table[buffer.arr[pos]]-> key)
+  if (mastro.table[buffer.arr[parent]]->key > mastro.table[buffer.arr[pos]]-> key)
     return;
 
   swap_elem(parent, pos);
@@ -384,7 +393,7 @@ void swap_elem(int temp1, int temp2){
 
   int index = buffer.arr[temp1];
   buffer.arr[temp1] = buffer.arr[temp2];
-  buffer.arr[temp2] = buffer.arr[temp1];
+  buffer.arr[temp2] = index;
 }
 
 void free_binary_tree(struct car *ptr){
@@ -500,4 +509,25 @@ void left_to_right(int start, int end, int km){
 
 void right_to_left(int start, int end, int km){
 
+}
+
+void print_all(){
+  if(tail != NULL){
+    printf("lista: \n");
+    struct station *tmp = tail;
+    while(tmp != NULL){
+      print_station(tmp);
+      tmp = tmp->prev;
+    }
+  }
+
+  if(buffer.load != 0){
+    printf("buffer: \n");
+    for(int i = 0; i < buffer.load; i++)
+      print_station(mastro.table[buffer.arr[i]]);
+  }
+}
+
+void print_station(struct station *tmp){
+  printf("  -key: %d\tindex: %d\tmax: %d\n", tmp->key, tmp->index, tmp->max);
 }
