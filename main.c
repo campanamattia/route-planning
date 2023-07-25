@@ -56,6 +56,8 @@ void insert_car(int, int);
 struct car* new_car(int);
 void free_binary_tree(struct car *);
 void realloc_table();
+void remove_car(int, struct car*, struct car*);
+int reload_max(int);
 
 struct buffer buffer;
 struct mastro mastro;
@@ -208,11 +210,42 @@ void rottama_auto(){
     if((node->count--) == 0){
       remove_car(index, father, node);
       if(key == mastro.table[index]->max)
-        reload_max(index);
+        mastro.table[index]->max = reload_max(index);
     }
     printf("rottamata\n");
     return;
   }
+}
+
+void calcola_percorso(){
+  int start, end;
+  fscanf(stdin, "%d %d", &start, &end);
+  
+  if(start == end && find(start) != NULL){
+    printf("%d\n", start);
+    return;
+  }
+  
+  int km = abs(start - end);
+  start = find(start);
+  end = find(end);
+
+  if(mastro.table[start] == NULL || mastro.table[end] == NULL){
+    printf("nessun percorso\n");
+    return;
+  }
+
+  if(mastro.table[start]->max >= km){
+    printf("%d %d\n", mastro.table[start]->key, mastro.table[end]->key);
+    return;
+  }
+
+  set_road();
+
+  if(start < end)
+    left_to_right(start, end, km);
+  else
+    right_to_left(start, end, km);
 }
 
 void set_road(){
@@ -449,4 +482,22 @@ void remove_car(int index, struct car *father, struct car *node){
   node->range = sub->range;
   node->count = sub->count;
   free(sub);
+}
+
+int reload_max(int index){
+  struct car *tmp = mastro.table[index]->cars;
+
+  while(tmp->right != NULL){
+    tmp = tmp->right;
+  }
+
+  return tmp->range;
+}
+
+void left_to_right(int start, int end, int km){
+
+}
+
+void right_to_left(int start, int end, int km){
+
 }
