@@ -34,12 +34,12 @@ struct mastro{
   struct station **table;
 };
 
-struct stack{
+struct queue{
   int key;
   int range;
   int left;
-  struct stack *next;
-  struct stack *relative;
+  struct queue *next;
+  struct queue *relative;
 };
 
 struct stop{
@@ -51,7 +51,7 @@ void aggiungi_stazione();
 void demolisci_stazione();
 void aggiungi_auto();
 void rottama_auto();
-void calcola_percorso();
+void pianifica_percorso();
 
 int find(int);
 unsigned int hash(int);
@@ -73,6 +73,8 @@ void remove_car(int, struct car*, struct car*);
 int reload_max(int);
 void left_to_right(int, int, int);
 void right_to_left(int, int, int);
+void free_queue();
+void add_end_to_bottom(struct queue*, int);
 
 void print_all();
 void print_station(struct station *);
@@ -81,7 +83,7 @@ struct buffer buffer;
 struct mastro mastro;
 struct station *tail;
 
-struct stack *stack, *bottom;
+struct queue *queue, *bottom;
 
 int main (){
   char command[20];
@@ -109,7 +111,7 @@ int main (){
         break;
       case '\0': rottama_auto();
         break;
-      case 'r': calcola_percorso();
+      case 'r': pianifica_percorso();
         break;
       default: print_all();
     }
@@ -246,7 +248,7 @@ void rottama_auto(){
   }
 }
 
-void calcola_percorso(){
+void pianifica_percorso(){
   int start, end;
   fscanf(stdin, "%d %d", &start, &end);
   
@@ -255,7 +257,7 @@ void calcola_percorso(){
     return;
   }
 
-  int km = abs(start - end);
+  int km = end - start;
   start = find(start);
   end = find(end);
 
@@ -264,19 +266,19 @@ void calcola_percorso(){
     return;
   }
 
-  if(mastro.table[start]->max >= km){
+  if(mastro.table[start]->max >= abs(km)){
     printf("%d %d\n", mastro.table[start]->key, mastro.table[end]->key);
     return;
   }
 
   set_road();
 
-  if(start < end)
+  if(km > 0)
     left_to_right(start, end, km);
   else
-    right_to_left(start, end, km);
+    right_to_left(start, end, -km);
 
-  free_the_stack();
+  free_queue();
 }
 
 void set_road(){
@@ -544,24 +546,24 @@ int reload_max(int index){
 }
 
 void left_to_right(int start, int end, int km){
-  struct stack *pop = (struct stack*) malloc(sizeof(struct stack));
+  struct queue *pop = (struct queue*) malloc(sizeof(struct queue));
   pop->key = mastro.table[start]->key;
   pop->range = mastro.table[start]->max;
   pop->left = km;
   pop->relative = NULL;
   pop->next = NULL;
 
-  stack = pop;
+  queue = pop;
   bottom = pop;
 
   struct station *tmp = mastro.table[start]->next;
-  while(tmp->prev != mastro.table[end] && pop != NULL){
+  while(pop != NULL && tmp != NULL){
     if(pop->key + pop->range < tmp->key - pop->key){
       pop = pop->next;
       continue;
     }
 
-    struct stack *elem = (struct stack*) malloc (sizeof(struct stack));
+    struct queue *elem = (struct queue*) malloc (sizeof(struct queue));
     elem->key = tmp->key;
     elem->range = tmp->max;
     elem->relative = pop;
@@ -600,8 +602,8 @@ void left_to_right(int start, int end, int km){
   printf("%d\n", road->key);
 }
 
-void add_end_to_bottom(struct stack *elem, int end){
-  struct stack *last = (struct stack*) malloc(sizeof(struct stack));
+void add_end_to_bottom(struct queue *elem, int end){
+  struct queue *last = (struct queue*) malloc(sizeof(struct queue));
   last->key = mastro.table[end]->key;
   last->relative = elem;
   last->next = NULL;
@@ -611,16 +613,15 @@ void add_end_to_bottom(struct stack *elem, int end){
 }
 
 void right_to_left(int start, int end, int km){
-
 }
 
-void free_the_stack(){
-  if(stack == NULL)
+void free_queue(){
+  if(queue == NULL)
     return;
   
-  while(stack != NULL){
-    struct stack *tmp = stack;
-    stack = stack->next;
+  while(queue != NULL){
+    struct queue *tmp = queue;
+    queue = queue->next;
     free(tmp);
   }
 
@@ -628,6 +629,7 @@ void free_the_stack(){
 }
 
 void print_all(){
+  printf("----------------------------------------print all----------------------------------------\n");
   if(tail != NULL){
     printf("lista: \n");
     struct station *tmp = tail;
@@ -636,7 +638,7 @@ void print_all(){
       tmp = tmp->prev;
     }
   }
-
+  
   if(buffer.load != 0){
     printf("buffer: \n");
     for(int i = 0; i < buffer.load; i++)

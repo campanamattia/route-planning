@@ -55,3 +55,8 @@ dkms.conf
 cmake-build-debug/
 CMakeLists.txt
 .idea/
+
+#vscode
+*.json
+*.txt
+*.exe
