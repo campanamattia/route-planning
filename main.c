@@ -34,6 +34,19 @@ struct mastro{
   struct station **table;
 };
 
+struct stack{
+  int key;
+  int range;
+  int left;
+  struct stack *next;
+  struct stack *relative;
+};
+
+struct stop{
+  int key;
+  struct stop *next;
+};
+
 void aggiungi_stazione();
 void demolisci_stazione();
 void aggiungi_auto();
@@ -68,6 +81,7 @@ struct buffer buffer;
 struct mastro mastro;
 struct station *tail;
 
+struct stack *stack, *bottom;
 
 int main (){
   char command[20];
@@ -237,7 +251,7 @@ void calcola_percorso(){
   fscanf(stdin, "%d %d", &start, &end);
   
   if(start == end && mastro.table[find(start)] != NULL){
-    printf("%d\n", start);
+    printf("%d %d\n", start, end);
     return;
   }
 
@@ -261,6 +275,8 @@ void calcola_percorso(){
     left_to_right(start, end, km);
   else
     right_to_left(start, end, km);
+
+  free_the_stack();
 }
 
 void set_road(){
@@ -528,11 +544,87 @@ int reload_max(int index){
 }
 
 void left_to_right(int start, int end, int km){
+  struct stack *pop = (struct stack*) malloc(sizeof(struct stack));
+  pop->key = mastro.table[start]->key;
+  pop->range = mastro.table[start]->max;
+  pop->left = km;
+  pop->relative = NULL;
+  pop->next = NULL;
 
+  stack = pop;
+  bottom = pop;
+
+  struct station *tmp = mastro.table[start]->next;
+  while(tmp->prev != mastro.table[end] && pop != NULL){
+    if(pop->key + pop->range < tmp->key - pop->key){
+      pop = pop->next;
+      continue;
+    }
+
+    struct stack *elem = (struct stack*) malloc (sizeof(struct stack));
+    elem->key = tmp->key;
+    elem->range = tmp->max;
+    elem->relative = pop;
+    elem->next = NULL;
+    bottom->next = elem;
+    bottom = elem;
+
+    elem->left = pop->left - elem->key;
+    if(elem->left - elem->range <= 0){
+      add_end_to_bottom(elem, end);
+      break;
+    }
+
+    tmp = tmp->next;
+  }
+
+  if(bottom->key != mastro.table[end]->key){
+    printf("nessun percorso\n");
+    return;
+  }
+
+  struct stop *road = NULL;
+  pop = bottom;
+  while(pop != NULL){
+    struct stop *elem = (struct stop*) malloc(sizeof(struct stop));
+    elem->key = pop->key;
+    elem->next = road;
+    road = elem;
+    pop = pop->relative;
+  }
+
+  while(road->next !=  NULL){
+    printf("%d ", road->key);
+    road = road->next;
+  }
+  printf("%d\n", road->key);
+}
+
+void add_end_to_bottom(struct stack *elem, int end){
+  struct stack *last = (struct stack*) malloc(sizeof(struct stack));
+  last->key = mastro.table[end]->key;
+  last->relative = elem;
+  last->next = NULL;
+
+  bottom->next = last;
+  bottom = last;
 }
 
 void right_to_left(int start, int end, int km){
 
+}
+
+void free_the_stack(){
+  if(stack == NULL)
+    return;
+  
+  while(stack != NULL){
+    struct stack *tmp = stack;
+    stack = stack->next;
+    free(tmp);
+  }
+
+  bottom = NULL;
 }
 
 void print_all(){
