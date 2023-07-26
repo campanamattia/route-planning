@@ -156,6 +156,8 @@ void demolisci_stazione(){
   free_binary_tree(mastro.table[index]->cars);
 
   if(mastro.table[index]->index == -1){
+    if(mastro.table[index] == tail)
+      tail = mastro.table[index]->prev;
     mastro.table[index]->next->prev = mastro.table[index]->prev;
     mastro.table[index]->prev->next = mastro.table[index]->next;
     free(mastro.table[index]);
@@ -347,14 +349,16 @@ void add_to_buffer(int index){
 
 int remove_max(){
   int max = buffer.arr[0];
-  swap_elem(0, buffer.load--);
+  buffer.load--;
+  swap_elem(0, buffer.load);
   delete_heapfy(0);
 
   return max;
 }
 
 void remove_pos(int pos){
-  swap_elem(pos, buffer.load--);
+  buffer.load--;
+  swap_elem(pos, buffer.load);
   delete_heapfy(pos);
 }
 
