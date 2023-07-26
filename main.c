@@ -37,14 +37,8 @@ struct mastro{
 struct queue{
   int key;
   int range;
-  int left;
   struct queue *next;
   struct queue *relative;
-};
-
-struct stop{
-  int key;
-  struct stop *next;
 };
 
 void aggiungi_stazione();
@@ -74,7 +68,9 @@ int reload_max(int);
 void left_to_right(int, int, int);
 void right_to_left(int, int, int);
 void free_queue();
-void add_end_to_bottom(struct queue*, int);
+void add_to_bottom(struct queue*, int);
+void print_top_bottom(struct queue *);
+void print_bottom_top();
 
 void print_all();
 void print_station(struct station *);
@@ -299,11 +295,17 @@ void set_road(){
       tmp = tmp->prev;
     }
 
-    if (tmp->key < key){
-      tmp->next->prev = mastro.table[index];
-      mastro.table[index]->next = tmp->next;
-      mastro.table[index]->prev = tmp;
-      tmp->next = mastro.table[index];
+    if(tmp->key < key){
+      if(tmp == tail){
+        tail = mastro.table[index];
+        mastro.table[index]->prev = tmp;
+        tmp->next = mastro.table[index];
+      } else {
+        tmp->next->prev = mastro.table[index];
+        mastro.table[index]->next = tmp->next;
+        mastro.table[index]->prev = tmp;
+        tmp->next = mastro.table[index];
+      }
       continue;
     }
 
@@ -335,7 +337,7 @@ unsigned int search_alg (int index, int attempt){
 void add_to_table(int key, int index){
   struct station *elem = (struct station *) malloc (sizeof(struct station));
   elem->key = key;
-  elem->max = -1;
+  elem->max = 0;
   elem->cars = NULL;
   elem->next = NULL;
   elem->prev = NULL;
@@ -549,7 +551,6 @@ void left_to_right(int start, int end, int km){
   struct queue *pop = (struct queue*) malloc(sizeof(struct queue));
   pop->key = mastro.table[start]->key;
   pop->range = mastro.table[start]->max;
-  pop->left = km;
   pop->relative = NULL;
   pop->next = NULL;
 
@@ -558,7 +559,7 @@ void left_to_right(int start, int end, int km){
 
   struct station *tmp = mastro.table[start]->next;
   while(pop != NULL && tmp != NULL){
-    if(pop->key + pop->range < tmp->key - pop->key){
+    if(pop->key + pop->range < tmp->key){
       pop = pop->next;
       continue;
     }
@@ -571,9 +572,8 @@ void left_to_right(int start, int end, int km){
     bottom->next = elem;
     bottom = elem;
 
-    elem->left = pop->left - elem->key;
-    if(elem->left - elem->range <= 0){
-      add_end_to_bottom(elem, end);
+    if((elem->key + elem->range)  >= mastro.table[end]->key){
+      add_to_bottom(elem, end);
       break;
     }
 
@@ -585,24 +585,10 @@ void left_to_right(int start, int end, int km){
     return;
   }
 
-  struct stop *road = NULL;
-  pop = bottom;
-  while(pop != NULL){
-    struct stop *elem = (struct stop*) malloc(sizeof(struct stop));
-    elem->key = pop->key;
-    elem->next = road;
-    road = elem;
-    pop = pop->relative;
-  }
-
-  while(road->next !=  NULL){
-    printf("%d ", road->key);
-    road = road->next;
-  }
-  printf("%d\n", road->key);
+  print_top_bottom(bottom);
 }
 
-void add_end_to_bottom(struct queue *elem, int end){
+void add_to_bottom(struct queue *elem, int end){
   struct queue *last = (struct queue*) malloc(sizeof(struct queue));
   last->key = mastro.table[end]->key;
   last->relative = elem;
@@ -613,6 +599,31 @@ void add_end_to_bottom(struct queue *elem, int end){
 }
 
 void right_to_left(int start, int end, int km){
+  struct queue *pop = (struct queue*) malloc(sizeof(struct queue));
+  pop->key = mastro.table[start]->key;
+  pop->range = mastro.table[start]->max;
+
+  queue = pop;
+  
+}
+
+void print_top_bottom(struct queue *tmp){
+  if(tmp == NULL)
+    return;
+
+  print_top_bottom(tmp->relative);
+  
+  if(tmp == bottom)
+    printf("%d\n", tmp->key);
+  else
+    printf("%d ", tmp->key);
+}
+
+void print_bottom_top(){
+  struct queue *tmp;
+  for(tmp = bottom; tmp != queue; tmp = tmp->relative)
+    printf("%d ", tmp->key);
+  printf("%d \n", tmp->key);
 }
 
 void free_queue(){
