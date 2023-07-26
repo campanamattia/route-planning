@@ -124,7 +124,7 @@ void aggiungi_stazione(){
   fscanf(stdin, "%d", &key);
   index = find(key);
 
-  if(mastro.table[index] != NULL && mastro.table[index]->key == key){
+  if(mastro.table[index] != NULL){
     printf("non aggiunta\n");
     return;
   }
@@ -221,13 +221,14 @@ void rottama_auto(){
       continue;
     }
 
-    if((node->count--) == 0){
+    node->count--;
+    if(node->count == 0){
       remove_car(index, father, node);
       if(key == mastro.table[index]->max)
         mastro.table[index]->max = reload_max(index);
     }
     printf("rottamata\n");
-    return;
+    break;
   }
 }
 
@@ -329,12 +330,28 @@ void add_to_table(int key, int index){
 }
 
 void realloc_table(){
-  int new = mastro.size * UP;
-  mastro.table = realloc(mastro.table, new);
-  for(int index = 0; index + mastro.size < new; index ++)
-    mastro.table[mastro.size + index] = NULL;
-  
-  mastro.size = new;
+  mastro.size = mastro.size * UP;
+  struct station **table = (struct station **) calloc(mastro.size, sizeof(struct station *));
+
+  if(tail != NULL){
+    struct station* tmp = tail;
+    while(tmp != NULL){
+      int new_index = find(tmp->key);
+      table[new_index] = tmp;
+      tmp->prev;
+    }
+  }
+
+  if(buffer.load != 0){
+    for(int i = 0; i < buffer.load; i++){
+      int new_index = find(mastro.table[buffer.arr[i]]->key);
+      table[new_index] = mastro.table[buffer.arr[i]];
+      table[new_index]->index = new_index;
+    }
+  }
+
+  free(mastro.table);
+  mastro.table = table;
 }
 
 void add_to_buffer(int index){
@@ -458,7 +475,7 @@ void remove_car(int index, struct car *father, struct car *node){
   side = &(mastro.table[index]->cars);
 
   if(father != node){
-    if(father->left->range == node->range)
+    if(father->left != NULL && father->left->range == node->range)
       side = &(father->left);
     else 
       side = &(father->right);
@@ -499,6 +516,9 @@ void remove_car(int index, struct car *father, struct car *node){
 
 int reload_max(int index){
   struct car *tmp = mastro.table[index]->cars;
+
+  if(tmp == NULL)
+    return 0;
 
   while(tmp->right != NULL){
     tmp = tmp->right;
