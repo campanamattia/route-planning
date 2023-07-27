@@ -2,8 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define STATIONS 10000
-#define BUFFER 512
+#define STATIONS 100000
+#define BUFFER 32768
 #define F1 113
 #define F2 127
 #define DENSITY 0.75
@@ -48,6 +48,7 @@ void rottama_auto();
 void pianifica_percorso();
 
 int find(int);
+int new_find(struct station **, int);
 unsigned int hash(int);
 unsigned int search_alg(int, int);
 void clear_buffer();
@@ -70,10 +71,6 @@ void right_to_left(int, int, int);
 void free_queue();
 void add_to_bottom(struct queue*, int);
 void print_top_bottom(struct queue *);
-void print_bottom_top();
-
-void print_all();
-void print_station(struct station *);
 
 struct buffer buffer;
 struct mastro mastro;
@@ -87,7 +84,7 @@ int main (){
   tail = NULL;
 
   buffer.load = 0;
-  buffer.arr = (int *) malloc (sizeof(int) * BUFFER);
+  buffer.arr = (unsigned int *) malloc (sizeof(unsigned int) * BUFFER);
   if(buffer.arr == NULL)
     return -1;
 
@@ -109,7 +106,6 @@ int main (){
         break;
       case 'r': pianifica_percorso();
         break;
-      default: print_all();
     }
     clear_buffer();
   }
@@ -125,16 +121,29 @@ int find (int key){
   if (mastro.table[index] == NULL)
     return index;
 
-  for(int attempt = 1; mastro.table[index] != NULL &&  mastro.table[index]->key != key && attempt < mastro.size; attempt ++)
+  int attempt;
+  for(attempt = 1; mastro.table[index] != NULL &&  mastro.table[index]->key != key && attempt < 2 * mastro.size; attempt ++)
     index = search_alg(index, attempt);
+
+  if(attempt >= 2 * mastro.size)
+    return -1;
 
   return index;
 }
 
 void aggiungi_stazione(){
   int key, size, index;
-  fscanf(stdin, "%d", &key);
-  index = find(key);
+  if(fscanf(stdin, "%d", &key) == EOF)
+    return;
+  
+  index = -1;
+
+  do{
+    index = find(key);
+    if(index == -1)
+      realloc_table();
+    else break;
+  } while(index == -1);
 
   if(mastro.table[index] != NULL){
     printf("non aggiunta\n");
@@ -144,9 +153,11 @@ void aggiungi_stazione(){
   add_to_table(key, index);
   add_to_buffer(index);
 
-  fscanf(stdin, "%d", &size);
+  if(fscanf(stdin, "%d", &size) == EOF)
+    return;;
   for(int i = 0; i < size; i++){
-    fscanf(stdin, "%d", &key);
+    if(fscanf(stdin, "%d", &key) == EOF)
+    return;
     insert_car(index, key);
     if(mastro.table[index]->max < key)
       mastro.table[index]->max = key;
@@ -157,10 +168,11 @@ void aggiungi_stazione(){
 
 void demolisci_stazione(){
   int index;
-  fscanf(stdin, "%d", &index);
+  if(fscanf(stdin, "%d", &index) == EOF)
+    return;
   index = find(index);
 
-  if(mastro.table[index] == NULL){
+  if(index < 0 || mastro.table[index] == NULL){
     printf("non demolita\n");
     return;
   }
@@ -170,8 +182,11 @@ void demolisci_stazione(){
   if(mastro.table[index]->index == -1){
     if(mastro.table[index] == tail)
       tail = mastro.table[index]->prev;
-    mastro.table[index]->next->prev = mastro.table[index]->prev;
-    mastro.table[index]->prev->next = mastro.table[index]->next;
+    else 
+      mastro.table[index]->next->prev = mastro.table[index]->prev;
+    if(mastro.table[index]->prev != NULL)
+      mastro.table[index]->prev->next = mastro.table[index]->next;
+
     free(mastro.table[index]);
     mastro.table[index] = NULL;
   } else {
@@ -185,7 +200,8 @@ void demolisci_stazione(){
 
 void aggiungi_auto(){
   int index;
-  fscanf(stdin, "%d", &index);
+  if(fscanf(stdin, "%d", &index) == EOF)
+    return;;
   index = find(index);
 
   if(mastro.table[index] == NULL){
@@ -193,7 +209,8 @@ void aggiungi_auto(){
     return;
   }
   int key;
-  fscanf(stdin, "%d", &key);
+  if(fscanf(stdin, "%d", &key) == EOF)
+    return;
   insert_car(index, key);
   if(mastro.table[index]->max < key)
     mastro.table[index]->max = key;
@@ -202,7 +219,8 @@ void aggiungi_auto(){
 
 void rottama_auto(){
   int index;
-  fscanf(stdin, "%d", &index);
+  if(fscanf(stdin, "%d", &index) == EOF)
+    return;
   index = find(index);
 
   if(mastro.table[index] == NULL){
@@ -211,7 +229,8 @@ void rottama_auto(){
   }
 
   int key;
-  fscanf(stdin, "%d", &key);
+  if(fscanf(stdin, "%d", &key) == EOF)
+    return;
   
   struct car *node = mastro.table[index]->cars;
   struct car *father = node;
@@ -246,7 +265,8 @@ void rottama_auto(){
 
 void pianifica_percorso(){
   int start, end;
-  fscanf(stdin, "%d %d", &start, &end);
+  if(fscanf(stdin, "%d %d", &start, &end) == EOF)
+    return;
   
   if(start == end && mastro.table[find(start)] != NULL){
     printf("%d %d\n", start, end);
@@ -356,22 +376,33 @@ void realloc_table(){
   if(tail != NULL){
     struct station* tmp = tail;
     while(tmp != NULL){
-      int new_index = find(tmp->key);
+      int new_index = new_find(table, tmp->key);
       table[new_index] = tmp;
-      tmp->prev;
+      tmp = tmp->prev;
     }
   }
 
   if(buffer.load != 0){
     for(int i = 0; i < buffer.load; i++){
-      int new_index = find(mastro.table[buffer.arr[i]]->key);
+      int new_index = new_find(table, mastro.table[buffer.arr[i]]->key);
       table[new_index] = mastro.table[buffer.arr[i]];
-      table[new_index]->index = new_index;
+      buffer.arr[i] = new_index;
     }
   }
 
   free(mastro.table);
   mastro.table = table;
+}
+
+int new_find(struct station **table, int key){
+  int index = hash(key);
+  if(table[index] == NULL)
+    return index;
+
+  for(int attempt = 0; table[index] != NULL; attempt++)
+    index = search_alg(index, attempt);
+  
+  return index;
 }
 
 void add_to_buffer(int index){
@@ -380,7 +411,8 @@ void add_to_buffer(int index){
 
   insert_heapfy(buffer.load);
   
-  if (buffer.load++ == BUFFER)
+  buffer.load ++;
+  if (buffer.load == BUFFER)
     set_road();
 }
 
@@ -573,7 +605,7 @@ void left_to_right(int start, int end, int km){
     bottom = elem;
 
     if((elem->key + elem->range)  >= mastro.table[end]->key){
-      add_to_bottom(elem, end);
+      add_to_bottom(elem, mastro.table[end]->key);
       break;
     }
 
@@ -588,23 +620,66 @@ void left_to_right(int start, int end, int km){
   print_top_bottom(bottom);
 }
 
-void add_to_bottom(struct queue *elem, int end){
-  struct queue *last = (struct queue*) malloc(sizeof(struct queue));
-  last->key = mastro.table[end]->key;
-  last->relative = elem;
-  last->next = NULL;
-
-  bottom->next = last;
-  bottom = last;
-}
 
 void right_to_left(int start, int end, int km){
   struct queue *pop = (struct queue*) malloc(sizeof(struct queue));
   pop->key = mastro.table[start]->key;
   pop->range = mastro.table[start]->max;
+  pop->relative = NULL;
+  pop->next = NULL;
 
   queue = pop;
-  
+  bottom = pop;
+
+  struct station *tmp = mastro.table[start]->prev;
+  struct queue *stop = NULL;
+  while(pop != NULL && tmp != NULL && pop != stop && tmp != mastro.table[end]){
+    if(pop->key - pop->range > tmp->key){
+      pop = pop->next;
+      continue;
+    }
+
+    if(stop == NULL){
+      struct queue *elem = (struct queue*) malloc(sizeof(struct queue));
+      elem->key = tmp->key;
+      elem->range = tmp->max;
+      elem->relative = pop;
+
+      bottom->next = elem;
+      bottom = elem;
+      elem->next = NULL;
+
+      if(elem->key - elem->range <= mastro.table[end]->key){
+        add_to_bottom(elem, mastro.table[end]->key);
+        stop = elem;
+      }
+    } else {
+      if(tmp->key - tmp->max <= mastro.table[end]->key ){
+        stop->key = tmp->key;
+        stop->range = tmp->max;
+        stop->relative = pop;
+      }
+    }
+    tmp = tmp->prev;
+  }
+
+  if(bottom->key != mastro.table[end]->key){
+    printf("nessun percorso\n");
+    return;
+  }
+
+  print_top_bottom(bottom);
+}
+
+void add_to_bottom(struct queue *elem, int key){
+  struct queue *last = (struct queue*) malloc(sizeof(struct queue));
+  last->key = key;
+  last->range = 0;
+  last->relative = elem;
+  last->next = NULL;
+
+  bottom->next = last;
+  bottom = last;
 }
 
 void print_top_bottom(struct queue *tmp){
@@ -619,12 +694,17 @@ void print_top_bottom(struct queue *tmp){
     printf("%d ", tmp->key);
 }
 
-void print_bottom_top(){
-  struct queue *tmp;
-  for(tmp = bottom; tmp != queue; tmp = tmp->relative)
-    printf("%d ", tmp->key);
-  printf("%d \n", tmp->key);
-}
+/*void print_top_bottom(struct queue *tmp){
+  if(tmp == NULL)
+    return;
+
+  print_top_bottom(tmp->relative);
+  
+  if(tmp == bottom)
+    printf("%d\n", tmp->key);
+  else
+    printf("%d-%d\t", tmp->key, tmp->range);
+}*/
 
 void free_queue(){
   if(queue == NULL)
@@ -637,26 +717,4 @@ void free_queue(){
   }
 
   bottom = NULL;
-}
-
-void print_all(){
-  printf("----------------------------------------print all----------------------------------------\n");
-  if(tail != NULL){
-    printf("lista: \n");
-    struct station *tmp = tail;
-    while(tmp != NULL){
-      print_station(tmp);
-      tmp = tmp->prev;
-    }
-  }
-  
-  if(buffer.load != 0){
-    printf("buffer: \n");
-    for(int i = 0; i < buffer.load; i++)
-      print_station(mastro.table[buffer.arr[i]]);
-  }
-}
-
-void print_station(struct station *tmp){
-  printf("  -key: %d\tindex: %d\tmax: %d\n", tmp->key, tmp->index, tmp->max);
 }
