@@ -57,6 +57,5 @@ CMakeLists.txt
 .idea/
 
 #vscode
-*.json
-*.txt
-*.exe
+.vscode/
+out/
