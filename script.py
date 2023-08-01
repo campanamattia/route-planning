@@ -28,7 +28,7 @@ def compile_and_run(c_program, input_file, expected_output, output_file, test_nu
                 report_file.write(f"Riga {i + 1}: {output_line.strip()}\n")
 
 if __name__ == "__main__":
-    c_program = "main.c"
+    c_program = "programm.c"
     # Compila il programma C
     compile_cmd = f"gcc -o {c_program.split('.')[0]} {c_program} -std=c11"
     os.system(compile_cmd)

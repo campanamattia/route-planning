@@ -2,13 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define TOMBSTONE ((void *)-1)
 #define STATIONS 99991
 #define BUFFER 32768
-#define F1 113
-#define F2 127
-#define DENSITY 0.75
-#define UP 1.75
+
 
 struct car{
     int range;
@@ -21,18 +17,13 @@ struct station {
     int range;
     int index;
     struct car *cars;
+    struct station *sib;
     struct station *next, *prev;
 };
 
 struct buffer{
-    unsigned int *arr;
     int load;
-};
-
-struct mastro{
-    int size;
-    int load;
-    struct station **table;
+    struct station **arr;
 };
 
 struct queue_l{
@@ -57,24 +48,22 @@ void rottama_auto();
 void pianifica_percorso();
 
 void prep_command();
-int allocate(int);
-int find(int);
+struct station* allocate(int);
+struct station* find_to_delete(int);
+struct station* find(int);
 unsigned int hash(int);
-unsigned int search_alg(int, int);
-void realloc_table();
 void add_to_table(int , int);
-void add_to_buffer(int);
-int remove_max();
+void add_to_buffer(struct station *);
+struct station* remove_max();
 void delete_heapfy(int);
 void insert_heapfy(int);
 int max_range(struct car *);
 void empty_buffer();
 void swap_elem(int, int);
-void add_car(int, int);
-int new_pos(struct station **, int);
+void add_car(struct station *, int);
 void free_cars(struct car*);
 void remove_pos(int);
-void remove_node(int, struct car*, struct car*);
+void remove_node(struct station*, struct car*, struct car*);
 void printf_from_bottom_l(struct queue_l*);
 void printf_from_bottom_r(struct queue_r*);
 void left_to_right(struct station*, struct station*);
@@ -84,8 +73,8 @@ void free_queue_r(struct queue_r*);
 
 
 struct buffer buffer;
-struct mastro mastro;
 struct station *tail;
+struct station **table;
 
 struct queue_l *head_l;
 struct queue_l *bottom_l;
@@ -100,11 +89,9 @@ int main(){
     tail = NULL;
 
     buffer.load = 0;
-    buffer.arr = (unsigned int *) calloc(BUFFER, sizeof(unsigned int));
+    buffer.arr = (struct station **) calloc(BUFFER, sizeof(struct station *));
 
-    mastro.size = STATIONS;
-    mastro.load = 0;
-    mastro.table = (struct station **) calloc(STATIONS, sizeof(struct station *));
+    table = (struct station **) calloc(STATIONS, sizeof(struct station *));
 
     while(fscanf(stdin, "%s", command) != EOF){
         switch(command[12]){
@@ -126,19 +113,18 @@ int main(){
 }
 
 void aggiungi_stazione(){
-    int key, index, size;
+    int key, size;
     if(fscanf(stdin, "%d", &key) == EOF)
         return;
 
-    index = allocate(key);
+    struct station *elem = allocate(key);
 
-    if(mastro.table[index] != NULL && mastro.table[index] != TOMBSTONE){
+    if(elem == NULL){
         printf("non aggiunta\n");
         return;
     }
 
-    add_to_table(index, key);
-    add_to_buffer(index);
+    add_to_buffer(elem);
 
     if(fscanf(stdin, "%d", &size) == EOF)
         return;
@@ -147,95 +133,40 @@ void aggiungi_stazione(){
         if(fscanf(stdin, "%d", &key) == EOF)
             return;
 
-        add_car(index, key);
-        if(mastro.table[index]->range < key)
-            mastro.table[index]->range = key;
+        add_car(elem, key);
+        if(elem->range < key)
+            elem->range = key;
     }
 
     printf("aggiunta\n");
 }
 
-int allocate(int key){
+struct station* allocate(int key){
+    struct station *to_insert;
     int index = hash(key);
-    if(mastro.table[index] == NULL || (mastro.table[index] != TOMBSTONE && mastro.table[index]->key == key))
-        return index;
     
-    int tmb = -1;
-    if(mastro.table[index] == TOMBSTONE)
-        tmb = index;
-    
-    index = search_alg(index, 1);
-    for(int attempt = 2; mastro.table[index] != NULL; attempt++){
-        if(mastro.table[index] == TOMBSTONE){
-            if(tmb == -1)
-                tmb = index;
-            continue;
-        }
+    for(to_insert = table[index]; to_insert != NULL && to_insert->key != key;)
+        if(to_insert->sib != NULL)
+            to_insert = to_insert->sib;
 
-        if(mastro.table[index]->key == key)
-            break;
-    }
-    
-    if(mastro.table[index] == NULL && tmb >= 0 && mastro.table[tmb] == TOMBSTONE)
-        return tmb;
-    
-    return index;
-}
-
-void add_to_table(int index, int key){
-    mastro.table[index] = (struct station*) calloc(1, sizeof(struct station));
-    mastro.table[index]->key = key;
-
-    mastro.load++;
-    double density = mastro.load / (double) mastro.size;
-    if(density >= DENSITY)
-        realloc_table();
-}
-
-void realloc_table(){
-    mastro.size *= UP;
-    struct station **new_table = (struct station**) calloc(mastro.size, sizeof(struct station*));
-
-    if(tail == NULL && buffer.load <= 0)
-        //something wrong
-        return;
-    
-    if(tail != NULL){
-        struct station *tmp;
-        for(tmp = tail; tmp != NULL; tmp = tmp->prev){
-            int new_index = new_pos(new_table, tmp->key);
-            new_table[new_index] = tmp;
-        }
+    if(table[index] == NULL){
+        table[index] = (struct station *) calloc(1, sizeof(struct station));
+        table[index]->key = key;
+        return table[index];
     }
 
-    if(buffer.load > 0){
-        for(int i = 0; i < buffer.load; i++){
-            if(mastro.table[buffer.arr[i]] == NULL || mastro.table[buffer.arr[i]] == TOMBSTONE)
-                continue;
-            int new_index = new_pos(new_table, mastro.table[buffer.arr[i]]->key);
-            new_table[new_index] = mastro.table[buffer.arr[i]];
-        }
-    }
+    if(to_insert->key == key)
+        return NULL;
 
-    free(mastro.table);
-    mastro.table = new_table;
+    to_insert->sib = (struct station *) calloc(1, sizeof(struct station))  ;
+    to_insert = to_insert->sib;
+    to_insert->key = key;
+    return to_insert;
 }
 
-int new_pos(struct station **table, int key){
-    int index = hash(key);
-    if(table[index] == NULL)
-        return index;
-    
-    index = search_alg(index, 1);
-    for(int attempt = 2; table[index] != NULL; attempt++)
-        index = search_alg(index, attempt);
-    
-    return index;
-}
-
-void add_to_buffer(int index){
-    mastro.table[index]->index = buffer.load;
-    buffer.arr[buffer.load] = index;
+void add_to_buffer(struct station *station){
+    station->index = buffer.load;
+    buffer.arr[buffer.load] = station;
 
     insert_heapfy(buffer.load);
     buffer.load++;
@@ -249,7 +180,7 @@ void insert_heapfy(int pos){
     return;
     int parent = (pos-1)/2;
 
-    if (mastro.table[buffer.arr[parent]]->key > mastro.table[buffer.arr[pos]]-> key)
+    if (buffer.arr[parent]->key > buffer.arr[pos]-> key)
     return;
 
     swap_elem(parent, pos);
@@ -257,24 +188,24 @@ void insert_heapfy(int pos){
 }
 
 void swap_elem(int i, int j){
-    mastro.table[buffer.arr[i]]->index = j;
-    mastro.table[buffer.arr[j]]->index = i;
+    buffer.arr[i]->index = j;
+    buffer.arr[j]->index = i;
 
-    int swap = buffer.arr[i];
+    struct station *swap = buffer.arr[i];
     buffer.arr[i] = buffer.arr[j];
     buffer.arr[j] = swap;
 }
 
-void add_car(int index, int key){
-    struct car *car = mastro.table[index]->cars;
-    if(car == NULL){
-        car = (struct car*) calloc(1, sizeof(struct car));
-        car->range = key;
-        car->count = 1;
-        mastro.table[index]->cars = car;
+void add_car(struct station *station, int key){
+    if(station->cars == NULL){
+        station->cars = (struct car*) calloc(1, sizeof(struct car));
+        station->cars->range = key;
+        station->cars->count = 1;
         return;
     }
 
+    struct car *car = station->cars;
+    
     while(car != NULL){
         if(car->range == key){
             car->count++;
@@ -319,14 +250,14 @@ void empty_buffer(){
     if(buffer.load <= 0)
         return;
     // for(int i = 0; i < buffer.load; i++){
-    //     printf("%d\t", mastro.table[buffer.arr[i]]->key);
+    //     printf("%d\t", table[buffer.arr[i]]->key);
     // }
     // printf("\n");s
 
     struct station *tmp = tail;
     while(buffer.load > 0){
-        struct station *to_insert = mastro.table[remove_max()];
-        if(to_insert == NULL || to_insert == TOMBSTONE)
+        struct station *to_insert = remove_max();
+        if(to_insert == NULL)
             //something wrong
             continue;
         to_insert->index = -1;
@@ -364,8 +295,8 @@ void empty_buffer(){
     }
 }
 
-int remove_max(){
-    int max = buffer.arr[0];
+struct station* remove_max(){
+    struct station  *max = buffer.arr[0];
 
     buffer.load--;
     swap_elem(0, buffer.load);
@@ -377,23 +308,23 @@ int remove_max(){
 void delete_heapfy(int pos){
     struct station *left;
     struct station *right;
-    struct station *max = mastro.table[buffer.arr[pos]];
+    struct station *max = buffer.arr[pos];
 
     if(pos * 2 + 1 < buffer.load)
-        left = mastro.table[buffer.arr[pos * 2 + 1]];
+        left = buffer.arr[pos * 2 + 1];
     else left = NULL;
     
     if(pos * 2 + 2 < buffer.load)
-        right =  mastro.table[buffer.arr[pos * 2 + 2]];
+        right =  buffer.arr[pos * 2 + 2];
     else right = NULL;
 
-    if(left != NULL && left != TOMBSTONE && left->key > max->key)
+    if(left != NULL && left->key > max->key)
         max = left;
     
-    if(right != NULL && right != TOMBSTONE && right->key > max->key)
+    if(right != NULL && right->key > max->key)
         max = right;
     
-    if(max->key == mastro.table[buffer.arr[pos]]->key)
+    if(max->key == buffer.arr[pos]->key)
         return;
 
     int index = max->index;
@@ -402,20 +333,29 @@ void delete_heapfy(int pos){
 }
 
 void demolisci_stazione(){
-    int index;
-    if(fscanf(stdin, "%d", &index) == EOF)
+    int key;
+    if(fscanf(stdin, "%d", &key) == EOF)
         return;
     
-    index = find(index);
-    if(index < 0){
+    struct station *ptr = find_to_delete(key);
+    
+    if(ptr == NULL){
         printf("non demolita\n");
         return;
     }
 
-    struct station *to_delete = mastro.table[index];
+    struct station *to_delete;
+    if(ptr == table[hash(key)]){
+        table[hash(key)] = ptr->sib;
+        to_delete = ptr;
+    } else {
+        to_delete = ptr->sib;
+        ptr->sib = to_delete->sib;
+    }
+
     if(to_delete->cars != NULL)
         free_cars(to_delete->cars);
-    
+
     if(to_delete->index == -1){
         if(to_delete == tail)
             tail = to_delete->prev;
@@ -426,31 +366,40 @@ void demolisci_stazione(){
     } else
         remove_pos(to_delete->index);
 
-    mastro.table[index] = TOMBSTONE;
     free(to_delete);
-
     printf("demolita\n");
 }
 
-int find(int key){
-    int index = hash(key);
-    if(mastro.table[index] == NULL)
-        return -1;
-    if(mastro.table[index] != TOMBSTONE && mastro.table[index]->key == key)
-        return index;
+struct station* find_to_delete(int key){
+    struct station *ptr = table[hash(key)];
 
-    index = search_alg(index, 1);
-    for(int attempt = 2; mastro.table[index] != NULL; attempt++){
-        if(mastro.table[index] != TOMBSTONE && mastro.table[index]->key == key)
-            break;
-        
-        index = search_alg(index, attempt);
-    }
-
-    if(mastro.table[index] != NULL && mastro.table[index] != TOMBSTONE && mastro.table[index]->key == key)
-        return index;
+    if(ptr == NULL)
+        return NULL;
     
-    return -1;
+    if(ptr->key == key)
+        return ptr;
+    
+    while(ptr->sib != NULL && ptr->sib->key != key)
+        ptr->sib;
+
+    if(ptr->sib == NULL && ptr->key != key)
+        return NULL;
+    
+    return ptr;
+}
+
+struct station* find(int key){
+    struct station *ptr = table[hash(key)];
+    if(ptr == NULL)
+        return NULL;
+    
+    if(ptr->key == key)
+        return ptr;
+    
+    while(ptr != NULL && ptr->key != key)
+        ptr = ptr->sib;
+
+    return ptr;
 }
 
 void free_cars(struct car *car){
@@ -471,35 +420,35 @@ void remove_pos(int index){
 }
 
 void aggiungi_auto(){
-    int index, range;
-    if(fscanf(stdin, "%d %d", &index, &range) == EOF)
+    int key, range;
+    if(fscanf(stdin, "%d %d", &key, &range) == EOF)
         return;
     
-    index = find(index);
-    if(index < 0){
+    struct station *ptr = find(key);
+    if(ptr == NULL){
         printf("non aggiunta\n");
         return;
     }
 
-    add_car(index, range);
-    if(range > mastro.table[index]->range)
-        mastro.table[index]->range = range;
+    add_car(ptr, range);
+    if(range > ptr->range)
+        ptr->range = range;
     printf("aggiunta\n");
     return;
 }
 
 void rottama_auto(){
-    int index, range;
-    if(fscanf(stdin, "%d %d", &index, &range) == EOF)
+    int key, range;
+    if(fscanf(stdin, "%d %d", &key, &range) == EOF)
         return;
     
-    index = find(index);
-    if(index < 0){
+    struct station *ptr = find(key);
+    if(ptr == NULL){
         printf("non rottamata\n");
         return;
     }
 
-    struct car *car = mastro.table[index]->cars;
+    struct car *car = ptr->cars;
     if(car == NULL){
         printf("non rottamata\n");
         return;
@@ -510,7 +459,7 @@ void rottama_auto(){
         if(car->range == range){
             car->count--;
             if(car->count == 0)
-                remove_node(index, father, car);
+                remove_node(ptr, father, car);
             printf("rottamata\n");
             return;
         }
@@ -525,14 +474,14 @@ void rottama_auto(){
     printf("non rottamata\n");
 }
 
-void remove_node(int index, struct car *father, struct car *car){
+void remove_node(struct station *ptr, struct car *father, struct car *car){
     if(father == car){
         if(car->left == NULL)
-            mastro.table[index]->cars = car->right;
+            ptr->cars = car->right;
         if(car->right == NULL)
-            mastro.table[index]->cars = car->left;
+            ptr->cars = car->left;
 
-        if(mastro.table[index]->cars == car){
+        if(ptr->cars == car){
             struct car *tmp = car->right;
             while(tmp->left != NULL){
                 father = tmp;
@@ -577,21 +526,21 @@ void remove_node(int index, struct car *father, struct car *car){
 }
 
 void pianifica_percorso(){
-    int start, end;
-    if(fscanf(stdin, "%d %d", &start, &end) == EOF)
+    int from, to;
+    if(fscanf(stdin, "%d %d", &from, &to) == EOF)
         return;
     
-    int km = end - start;
-    start = find(start);
-    end = find(end);
+    int km = to - from;
+    struct station *start = find(from);
+    struct station *end = find(to);
 
-    if(start < 0 || end < 0){
+    if(start == NULL || end == NULL){
         printf("nessun percorso");
         return;
     }
 
-    if(start == end || mastro.table[start]->range >= abs(km)){
-        printf("%d %d\n", mastro.table[start]->key, mastro.table[end]->key);
+    if(start == end || start->range >= abs(km)){
+        printf("%d %d\n", start->key, start->key);
         return;
     }
 
@@ -604,12 +553,12 @@ void pianifica_percorso(){
     // printf("\n");
 
     if(km < 0){
-        right_to_left(mastro.table[start], mastro.table[end]);
+        right_to_left(start, end);
         free_queue_r(head_r);
         return;
     }
 
-    left_to_right(mastro.table[start], mastro.table[end]);
+    left_to_right(start, end);
     free_queue_l(head_l);
 }
 
@@ -784,11 +733,7 @@ unsigned int hash(int key){
     h*= m;
     h ^= key;
 
-    return h % mastro.size;
-}
-
-unsigned int search_alg (int index, int attempt){
-    return (index + attempt * F1 + attempt * attempt * F2) % mastro.size;
+    return h % STATIONS;
 }
 
 void prep_command(){
