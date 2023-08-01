@@ -2,97 +2,96 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define STATIONS 99991
-#define BUFFER 32768
-
+#define HASH 79999
+#define BUFFER 65536  	
 
 struct car{
-    int range;
-    int count;
+    int range, count;
     struct car *right, *left;
 };
 
-struct station {
-    int key;
-    int range;
-    int index;
-    struct car *cars;
+struct station{
+    int key, range, index;
+    struct car *parking;
     struct station *sib;
     struct station *next, *prev;
 };
 
 struct buffer{
-    int load;
     struct station **arr;
+    int load;
 };
 
-struct queue_l{
-    int key;
-    int range;
-    struct queue_l *from;
-    struct queue_l *next;
+struct queue{
+    int key, range, step;
+    struct queue *father, *next;
 };
 
-struct queue_r{
-    int key;
-    int step;
-    int range;
-    struct queue_r *from;
-    struct queue_r *next;
-};
-
-void aggiungi_stazione();
-void demolisci_stazione();
-void aggiungi_auto();
-void rottama_auto();
-void pianifica_percorso();
-
-void prep_command();
-struct station* allocate(int);
-struct station* find_to_delete(int);
-struct station* find(int);
-unsigned int hash(int);
-void add_to_table(int , int);
-void add_to_buffer(struct station *);
-struct station* remove_max();
-void delete_heapfy(int);
-void insert_heapfy(int);
-int max_range(struct car *);
-void empty_buffer();
-void swap_elem(int, int);
-void add_car(struct station *, int);
-void free_cars(struct car*);
-void remove_pos(int);
-void remove_node(struct station*, struct car*, struct car*);
-void printf_from_bottom_l(struct queue_l*);
-void printf_from_bottom_r(struct queue_r*);
-void left_to_right(struct station*, struct station*);
-void right_to_left(struct station*, struct station*);
-void free_queue_l(struct queue_l *);
-void free_queue_r(struct queue_r*);
-
-
+struct station **table;
 struct buffer buffer;
 struct station *tail;
-struct station **table;
 
-struct queue_l *head_l;
-struct queue_l *bottom_l;
+struct queue *head;
+struct queue *bottom;
 
-struct queue_r *head_r;
-struct queue_r *bottom_r;
+void aggiungi_stazione();
+struct station* allocate(int);
+int hash(int);
+void in_buffer(struct station *);
+void insert_heapfy(int);
+void swap_elem(int, int);
+void clear_buffer();
+struct station* remove_max();
+void delete_heapfy(int);
+void add_car(struct station*, int);
 
+void demolisci_stazione();
+struct station* find_previous(int);
+void free_car(struct car*);
+void remove_pos(struct station *);
+
+void aggiungi_auto();
+struct station* find_station(int);
+
+void rottama_auto();
+void remove_node(struct station*, struct car*, struct car*);
+int max_range(struct station*);
+
+void pianifica_percorso();
+void left_to_right(struct station*, struct station*);
+void right_to_left(struct station*, struct station*);
+void print_from_bottom(struct queue*);
+void free_queue();
+
+void set_command(){
+    while(getchar() != '\n');
+}
+
+void print_buffer(){
+    printf("BUFFER:\n");
+    for(int i = 0; i < buffer.load; i++)
+        printf("  -key: %d\trange: %d\tindex: %d\n", buffer.arr[i]->key, buffer.arr[i]->range, buffer.arr[i]->index);
+    printf("\n");
+}
+
+void print_list(){
+    printf("LIST:\n");
+    for(struct station *tmp = tail; tmp != NULL; tmp = tmp->prev)
+        printf("  -key: %d\trange: %d\n", tmp->key, tmp->range);
+    printf("\n");
+}
 
 int main(){
-    char command[20];
-
-    tail = NULL;
+    table = (struct station **) calloc(HASH, sizeof(struct station *));
 
     buffer.load = 0;
     buffer.arr = (struct station **) calloc(BUFFER, sizeof(struct station *));
 
-    table = (struct station **) calloc(STATIONS, sizeof(struct station *));
+    tail = NULL;
+    head = NULL;
+    bottom = NULL;
 
+    char command[20];
     while(fscanf(stdin, "%s", command) != EOF){
         switch(command[12]){
             case 'z': aggiungi_stazione();
@@ -103,88 +102,95 @@ int main(){
                 break;
             case '\0': rottama_auto();
                 break;
-            case 'r': pianifica_percorso();
+            case 'r': //print_buffer();
+                pianifica_percorso();
+                //print_list();
                 break;
         }
-        prep_command();
+        set_command();
     }
 
     return 0;
 }
 
 void aggiungi_stazione(){
-    int key, size;
+    int key;
     if(fscanf(stdin, "%d", &key) == EOF)
         return;
-
-    struct station *elem = allocate(key);
-
-    if(elem == NULL){
+    
+    struct station *ptr = allocate(key);
+    if(ptr == NULL){
         printf("non aggiunta\n");
         return;
     }
 
-    add_to_buffer(elem);
+    in_buffer(ptr);
 
-    if(fscanf(stdin, "%d", &size) == EOF)
+    int cars, range;
+    if(fscanf(stdin, "%d", &cars) == EOF)
         return;
-    
-    for(int i = 0; i < size; i++){
-        if(fscanf(stdin, "%d", &key) == EOF)
+
+    for(int i = 0; i < cars;  i++){
+        if(fscanf(stdin, "%d", &range) == EOF)
             return;
 
-        add_car(elem, key);
-        if(elem->range < key)
-            elem->range = key;
+        add_car(ptr, range);
+        if(range > ptr->range)
+            ptr->range = range;
     }
 
     printf("aggiunta\n");
 }
 
-struct station* allocate(int key){
-    struct station *to_insert;
-    int index = hash(key);
-    
-    for(to_insert = table[index]; to_insert != NULL && to_insert->key != key;)
-        if(to_insert->sib != NULL)
-            to_insert = to_insert->sib;
+struct station* allocate (int key){
+    struct station *elem = table[hash(key)];
 
-    if(table[index] == NULL){
-        table[index] = (struct station *) calloc(1, sizeof(struct station));
-        table[index]->key = key;
-        return table[index];
+    if(elem == NULL){
+        elem = (struct station*) calloc(1, sizeof(struct station));
+        elem->key = key;
+        table[hash(key)] = elem;
+        return elem;
     }
 
-    if(to_insert->key == key)
-        return NULL;
+    struct station *prev = NULL;
+    while(elem != NULL){
+        if(elem->key == key)
+            return NULL;
 
-    to_insert->sib = (struct station *) calloc(1, sizeof(struct station))  ;
-    to_insert = to_insert->sib;
-    to_insert->key = key;
-    return to_insert;
+        prev = elem;
+        elem = elem->sib;
+    }
+
+    prev->sib = (struct station*) calloc(1, sizeof(struct station));
+    prev->sib->key = key;
+    return prev->sib;
 }
 
-void add_to_buffer(struct station *station){
-    station->index = buffer.load;
-    buffer.arr[buffer.load] = station;
+int hash(int key){
+    return key % HASH; 
+}
+
+void in_buffer(struct station *ptr){
+    buffer.arr[buffer.load] = ptr;
+    ptr->index = buffer.load;
 
     insert_heapfy(buffer.load);
     buffer.load++;
 
     if(buffer.load == BUFFER)
-        empty_buffer();
+        clear_buffer();
 }
 
-void insert_heapfy(int pos){
-    if(pos == 0)
-    return;
-    int parent = (pos-1)/2;
+void insert_heapfy(int index){
+    if(index == 0)
+        return;
 
-    if (buffer.arr[parent]->key > buffer.arr[pos]-> key)
-    return;
+    int father = (index - 1) / 2;
 
-    swap_elem(parent, pos);
-    insert_heapfy(parent);
+    if(buffer.arr[father]->key < buffer.arr[index]->key){
+        swap_elem(father, index);
+        insert_heapfy(father);
+    }
 }
 
 void swap_elem(int i, int j){
@@ -196,102 +202,49 @@ void swap_elem(int i, int j){
     buffer.arr[j] = swap;
 }
 
-void add_car(struct station *station, int key){
-    if(station->cars == NULL){
-        station->cars = (struct car*) calloc(1, sizeof(struct car));
-        station->cars->range = key;
-        station->cars->count = 1;
-        return;
-    }
-
-    struct car *car = station->cars;
-    
-    while(car != NULL){
-        if(car->range == key){
-            car->count++;
-            return;
-        }
-
-        if(car->range < key){
-            if(car->right == NULL){
-                car->right = (struct car*) calloc(1, sizeof(struct car));
-                car->right->range = key;
-                car->right->count = 1;
-                return;
-            }
-            car  = car->right;
-            continue;
-        }
-
-        if(car->range > key){
-            if(car->left == NULL){
-                car->left = (struct car*) calloc(1, sizeof(struct car));
-                car->left->range = key;
-                car->left->count = 1;
-                return;
-            }
-            car = car->left;
-            continue;
-        }
-    }
-}
-
-int max_range(struct car *car){
-    if(car == NULL)
-        return 0;
-    
-    while(car->right != NULL)
-        car = car->right;
-    
-    return car->range;
-}
-
-void empty_buffer(){
+void clear_buffer(){
     if(buffer.load <= 0)
         return;
-    // for(int i = 0; i < buffer.load; i++){
-    //     printf("%d\t", table[buffer.arr[i]]->key);
-    // }
-    // printf("\n");s
 
-    struct station *tmp = tail;
+    struct station *list = tail;
     while(buffer.load > 0){
-        struct station *to_insert = remove_max();
-        if(to_insert == NULL)
+        struct station *elem = remove_max();
+        if(elem == NULL)
             //something wrong
             continue;
-        to_insert->index = -1;
-
-        if(tail == NULL){
-            tail = to_insert;
-            tmp = to_insert;
+        elem->index = -1;
+        if(list == NULL){
+            list = elem;
+            tail = elem;
             continue;
         }
-        while(tmp != NULL && tmp->prev != NULL){
-            if(to_insert->key > tmp->key)
+
+        while(list != NULL && list->prev != NULL){
+            if(list->key < elem->key)
                 break;
-            tmp = tmp->prev;
+            
+            list = list->prev;
         }
-        if(tmp == NULL)
-            //something wrong
-            return;
 
-        if(tmp->prev == NULL && tmp->key > to_insert->key){
-            tmp->prev = to_insert;
-            to_insert->next = tmp;
+        if(list->key < elem->key){
+            if(list == tail){
+                list->next = elem;
+                elem->prev = list;
+                tail = elem;
+                list = elem;
+                continue;
+            }
+            elem->next = list->next;
+            elem->prev = list;
+
+            elem->next->prev = elem;
+            elem->prev->next = elem;
+            list = elem;
             continue;
         }
 
-        if(tmp == tail){
-            tail = to_insert;
-            to_insert->prev = tmp;
-            tmp->next = to_insert;
-        }
-
-        tmp->next->prev = to_insert;
-        to_insert->next = tmp->next;
-        to_insert->prev = tmp;
-        tmp->next = to_insert;
+        list->prev = elem;
+        elem->next = list;
     }
 }
 
@@ -300,8 +253,8 @@ struct station* remove_max(){
 
     buffer.load--;
     swap_elem(0, buffer.load);
-    delete_heapfy(0);
 
+    delete_heapfy(0);
     return max;
 }
 
@@ -332,90 +285,123 @@ void delete_heapfy(int pos){
     delete_heapfy(index);
 }
 
-void demolisci_stazione(){
+void add_car(struct station *ptr, int range){
+    if(ptr->parking == NULL){
+        ptr->parking = (struct car*) calloc(1, sizeof(struct car));
+        ptr->parking->range = range;
+        ptr->parking->count = 1;
+        return;
+    }
+
+    struct car *car = ptr->parking;
+    while(car != NULL){
+        if(car->range == range){
+            car->count++;
+            return;
+        }
+
+        if(car->range < range){
+            if(car->right == NULL){
+                car->right = (struct car*) calloc(1, sizeof(struct car));
+                car->right->range = range;
+                car->count = 1;
+                return;
+            }
+            car = car->right;
+            continue;
+        }
+
+        if(car->range > range){
+            if(car->left == NULL){
+                car->left = (struct car*) calloc(1, sizeof(struct car));
+                car->left->range = range;
+                car->left->count = 1;
+                return;
+            }
+            car = car->left;
+            continue;
+        }
+    }
+
+    printf("i didn't add the car, i don't know why");
+}
+
+void demolisci_stazione() {
     int key;
-    if(fscanf(stdin, "%d", &key) == EOF)
+    if (fscanf(stdin, "%d", &key) == EOF)
         return;
     
-    struct station *ptr = find_to_delete(key);
-    
-    if(ptr == NULL){
+    struct station *ptr = table[hash(key)];
+    if (ptr == NULL) {
         printf("non demolita\n");
         return;
     }
 
-    struct station *to_delete;
-    if(ptr == table[hash(key)]){
+    if(ptr->key == key)
         table[hash(key)] = ptr->sib;
-        to_delete = ptr;
-    } else {
-        to_delete = ptr->sib;
-        ptr->sib = to_delete->sib;
+    else{
+        struct station *prev = find_previous(key);
+        if(prev == NULL){
+            printf("non demolita\n");
+            return;
+        }
+        ptr = prev->sib;
+        prev->sib = ptr->sib;
     }
 
-    if(to_delete->cars != NULL)
-        free_cars(to_delete->cars);
+    struct car *car = ptr->parking;
+    if (car != NULL)
+        free_car(car);
 
-    if(to_delete->index == -1){
-        if(to_delete == tail)
-            tail = to_delete->prev;
-        else
-            to_delete->next->prev = to_delete->prev;
-        if(to_delete->prev != NULL)
-            to_delete->prev->next = to_delete->next;
-    } else
-        remove_pos(to_delete->index);
+    if (ptr->index == -1) {
+        if (tail == ptr) {
+            tail = ptr->prev;
+            tail->next = NULL;
+        } else {
+            ptr->next->prev = ptr->prev;
+            if (ptr->prev != NULL)
+                ptr->prev->next = ptr->next;
+        }
+    } else {
+        remove_pos(ptr);
+    }
 
-    free(to_delete);
+    free(ptr);
     printf("demolita\n");
 }
 
-struct station* find_to_delete(int key){
-    struct station *ptr = table[hash(key)];
+struct station* find_previous(int key) {
+    int index = hash(key);
+    struct station *elem = table[index];
+    struct station *prev = NULL;
 
-    if(ptr == NULL)
-        return NULL;
-    
-    if(ptr->key == key)
-        return ptr;
-    
-    while(ptr->sib != NULL && ptr->sib->key != key)
-        ptr->sib;
+    while (elem != NULL) {
+        if (elem->key == key)
+            return prev;
 
-    if(ptr->sib == NULL && ptr->key != key)
-        return NULL;
-    
-    return ptr;
+        prev = elem;
+        elem = elem->sib;
+    }
+
+    return NULL;
 }
 
-struct station* find(int key){
-    struct station *ptr = table[hash(key)];
-    if(ptr == NULL)
-        return NULL;
-    
-    if(ptr->key == key)
-        return ptr;
-    
-    while(ptr != NULL && ptr->key != key)
-        ptr = ptr->sib;
-
-    return ptr;
-}
-
-void free_cars(struct car *car){
+void free_car(struct car *car){
     if(car == NULL)
         return;
-
-    free_cars(car->left);
-    free_cars(car->right);
+    
+    free_car(car->left);
+    free_car(car->right);
 
     free(car);
 }
 
-void remove_pos(int index){
+void remove_pos(struct station *elem){
     buffer.load--;
+    if(elem->index == buffer.load)
+        return;
+    int index = elem->index;
     swap_elem(index, buffer.load);
-
     delete_heapfy(index);
 }
 
@@ -424,17 +410,32 @@ void aggiungi_auto(){
     if(fscanf(stdin, "%d %d", &key, &range) == EOF)
         return;
     
-    struct station *ptr = find(key);
+    struct station *ptr = find_station(key);
     if(ptr == NULL){
         printf("non aggiunta\n");
         return;
     }
 
     add_car(ptr, range);
+
     if(range > ptr->range)
         ptr->range = range;
+
     printf("aggiunta\n");
-    return;
+}
+
+struct station* find_station(int key) {
+    int index = hash(key);
+    struct station *elem = table[index];
+
+    while (elem != NULL) {
+        if (elem->key == key)
+            return elem;
+
+        elem = elem->sib;
+    }
+
+    return NULL;
 }
 
 void rottama_auto(){
@@ -442,19 +443,19 @@ void rottama_auto(){
     if(fscanf(stdin, "%d %d", &key, &range) == EOF)
         return;
     
-    struct station *ptr = find(key);
+    struct station *ptr = find_station(key);
     if(ptr == NULL){
         printf("non rottamata\n");
         return;
     }
 
-    struct car *car = ptr->cars;
+    struct car *car = ptr->parking;
     if(car == NULL){
         printf("non rottamata\n");
         return;
     }
 
-    struct car *father = car;
+    struct car *father = NULL;
     while(car != NULL){
         if(car->range == range){
             car->count--;
@@ -465,125 +466,122 @@ void rottama_auto(){
         }
 
         father = car;
-        if(car->range > range)
-            car = car->left;
-        else 
-            car = car->right;
+        car = (car->range < range) ? car->right : car->left;
     }
 
     printf("non rottamata\n");
 }
 
-void remove_node(struct station *ptr, struct car *father, struct car *car){
-    if(father == car){
-        if(car->left == NULL)
-            ptr->cars = car->right;
-        if(car->right == NULL)
-            ptr->cars = car->left;
+void remove_node(struct station *ptr, struct car *father, struct car *car) {
+    if (ptr == NULL || car == NULL)
+        return;
 
-        if(ptr->cars == car){
-            struct car *tmp = car->right;
-            while(tmp->left != NULL){
-                father = tmp;
-                tmp = tmp->left;
-            }
-            car->range = tmp->range;
-            car->count = tmp->count;
-            father->left = tmp->right;
-            car = tmp;
+    int range = car->range;
+
+    if (car->left == NULL || car->right == NULL) {
+        struct car *child = (car->left != NULL) ? car->left : car->right;
+
+        if (father == NULL)
+            ptr->parking = child;
+        else {
+            if (car == father->left)
+                father->left = child;
+            else
+                father->right = child;
         }
 
         free(car);
+        if(range == ptr->range)
+            ptr->range = max_range(ptr);
         return;
     }
 
-    struct car **side = &father->right;
-    if(father->left == car)
-        side = &father->left;
+    struct car *successor = car->right;
+    struct car *successor_parent = car;
 
-    if(car->left == NULL){
-        *side = car->right;
-        free(car);
-        return;
+    while (successor->left != NULL) {
+        successor_parent = successor;
+        successor = successor->left;
     }
 
-    if(car->right == NULL){
-        *side = car->left;
-        free(car);
-        return;
-    }
+    car->range = successor->range;
+    car->count = successor->count;
+
+    if (successor_parent == car)
+        car->right = successor->right;
+    else
+        successor_parent->left = successor->right;
+
+    free(successor);
     
-    struct car *tmp = car->right;
-    while(tmp->left != NULL){
-        father = tmp;
-        tmp = tmp->left;
-    }
-    car->range = tmp->range;
-    car->count = tmp->count;
-    father->left = tmp->right;
-    car = tmp;
-    free(car);
+    if(range == ptr->range)
+        ptr->range = max_range(ptr);
+}
+
+int max_range(struct station *ptr){
+    if(ptr->parking == NULL)
+        return 0;
+
+    struct car *car = ptr->parking;
+    while(car->right != NULL)
+        car = car->right;
+
+    return car->range;
 }
 
 void pianifica_percorso(){
     int from, to;
     if(fscanf(stdin, "%d %d", &from, &to) == EOF)
         return;
-    
+
     int km = to - from;
-    struct station *start = find(from);
-    struct station *end = find(to);
+    struct station *start = find_station(from);
+    struct station *end = find_station(to);
 
     if(start == NULL || end == NULL){
-        printf("nessun percorso");
+        printf("nessun percorso\n");
         return;
     }
 
     if(start == end || start->range >= abs(km)){
-        printf("%d %d\n", start->key, start->key);
+        printf("%d %d\n", start->key, end->key);
         return;
     }
 
-    empty_buffer();
-    // struct station *tmp = tail;
-    // while(tmp != NULL){
-    //     printf("%d\t", tmp->key);
-    //     tmp = tmp->prev;
-    // }
-    // printf("\n");
+    clear_buffer();
 
-    if(km < 0){
+    if(km > 0)
+        left_to_right(start, end);
+    else
         right_to_left(start, end);
-        free_queue_r(head_r);
-        return;
-    }
 
-    left_to_right(start, end);
-    free_queue_l(head_l);
+    free_queue();
 }
 
 void left_to_right(struct station *start, struct station *end){
-    head_l =(struct queue_l*) calloc(1, sizeof(struct queue_l));
-    head_l->key = start->key;
-    head_l->range = start->range;
-    bottom_l = head_l;
+    head = (struct queue*) calloc(1, sizeof(struct queue));
+    bottom = head;
+    head->key = start->key;
+    head->range = start->range;
 
-    struct queue_l *pop = head_l;
+    struct queue *pop = head;
     struct station *tmp = start->next;
-    while(pop != NULL && tmp != NULL && pop->key != end->key){
-        if(pop->range + pop->key < tmp->key){
+    while(pop != NULL && tmp != NULL && tmp != end){
+        if(pop->key + pop->range < tmp->key){
             pop = pop->next;
             continue;
         }
 
-        bottom_l->next = (struct queue_l*) calloc(1, sizeof(struct queue_l));
-        bottom_l = bottom_l->next;
-        bottom_l->key = tmp->key;
-        bottom_l->range = tmp->range;
-        bottom_l->from = pop;
+        struct queue *elem = (struct queue*) calloc(1, sizeof(struct queue));
+        elem->key = tmp->key;
+        elem->range = tmp->range;
+        elem->father = pop;
 
-        if(bottom_l->key + bottom_l->range >= end->key){
-            printf_from_bottom_l(bottom_l);
+        bottom->next = elem;
+        bottom = elem;
+
+        if(bottom->key + bottom->range >= end->key){
+            print_from_bottom(bottom);
             printf("%d\n", end->key);
             return;
         }
@@ -591,151 +589,96 @@ void left_to_right(struct station *start, struct station *end){
         tmp = tmp->next;
     }
 
+    // print_from_bottom(bottom);
     printf("nessun percorso\n");
 }
 
-void printf_from_bottom_l(struct queue_l *pop){
-    if(pop == NULL)
-        return;
-    
-    printf_from_bottom_l(pop->from);
-    printf("%d ", pop->key);
-    return;
-}
-
-void free_queue_l(struct queue_l *to_free){
-    if(to_free == NULL)
-        return;
-
-    while(to_free != NULL){
-        struct queue_l *tmp = to_free->next;
-        free(to_free);
-        to_free = tmp;
-    }
-
-    head_l = NULL;
-    bottom_l = NULL;
-}
-
 void right_to_left(struct station *start, struct station *end){
-    head_r = (struct queue_r*) calloc(1, sizeof(struct queue_r));
-    head_r->key = start->key;
-    head_r->range = start->range;
-    bottom_r = head_r;
+    head = (struct queue*) calloc(1, sizeof(struct queue));
+    bottom = head;
+    head->key = start->key;
+    head->range = start->range;
+    head->step = 0;
 
-    struct queue_r *pop = head_r;
-    struct station *tmp = start->prev;
-    while(pop != NULL && tmp != NULL && pop->key != end->key && tmp->key != end->key){
+    struct queue *pop = head;
+    struct station *tmp = start;
+    while(pop != NULL && tmp != NULL && tmp != end){
         if(pop->key - pop->range > tmp->key){
             pop = pop->next;
             continue;
         }
 
-        bottom_r->next = (struct queue_r*) calloc(1, sizeof(struct queue_r));
-        bottom_r = bottom_r->next;
-        bottom_r->key = tmp->key;
-        bottom_r->range = tmp->range;
-        bottom_r->from = pop;
-        bottom_r->step = pop->step + 1;
+        struct queue *elem = (struct queue*) calloc(1, sizeof(struct queue));
+        elem->key = tmp->key;
+        elem->range = tmp->range;
+        elem->father = pop;
+        elem->step = pop->step + 1;
 
-        if(bottom_r->key - bottom_r->range <= end->key)
+        bottom->next = elem;
+        bottom = elem;
+
+        if(bottom->key - bottom->range <= end->key)
             break;
         
         tmp = tmp->prev;
     }
 
-    if(pop == NULL || bottom_r->key - bottom_r->range > end->key || tmp == NULL){
+    if(bottom->key - bottom->range > end->key){
+        // print_from_bottom(bottom);
         printf("nessun percorso\n");
         return;
     }
 
-
-    while(pop != NULL && tmp != NULL && pop != bottom_r && tmp->key != end->key){
+    while(pop != NULL && tmp != NULL && pop != bottom && tmp->key != end->key){
         if(pop->key - pop->range > tmp->key){
             pop = pop->next;
             continue;
         }
 
-        if(tmp->key - tmp->range <= end->key && bottom_r->step == pop->step + 1){
-            bottom_r->key = tmp->key;
-            bottom_r->range = tmp->range;
-            bottom_r->from = pop;
+        if(tmp->key - tmp->range <= end->key && pop->step + 1 <= bottom->step){
+            bottom->key = tmp->key;
+            bottom->range = tmp->range;
+            bottom->father = pop;
+            bottom->step = pop->step +1;
         }
 
         tmp = tmp->prev;
     }
 
-    // struct queue_r *print = head_l;
-    // printf("%d, %d, NULL\n", print->key, print->range);
-    // print = print->next;
-    // while(print != NULL){
-    //     printf("%d, r: %d, f: %d\n", print->key, print->range, print->from->key);
-    //     print = print->next;
-    // }
-    // printf("\n");
-
-    struct queue_r *father = bottom_r->from;
-    struct queue_r *son = bottom_r;
+    struct queue *son = bottom;
+    struct queue *father = bottom->father;
     while(father != NULL){
         for(pop = father->next; father->step == pop->step && pop != son; pop = pop->next){
             if(pop->key - pop->range <= son->key)
-                son->from = pop;
+                son->father = pop;
         }
 
-        son = son->from;
-        father = father->from;
+        son = son->father;
+        father = father->father;
     }
 
-    // print = head_r;
-    // printf("%d, %d, NULL\n", print->key, print->range);
-    // print = print->next;
-    // while(print != NULL){
-    //     printf("%d, r: %d, f: %d\n", print->key, print->range, print->from->key);
-    //     print = print->next;
-    // }
-    // printf("\n");
-
-    printf_from_bottom_r(bottom_r);
+    print_from_bottom(bottom);
     printf("%d\n", end->key);
 }
 
-void printf_from_bottom_r(struct queue_r *pop){
-    if(pop == NULL)
+void print_from_bottom(struct queue *ptr){
+    if(ptr == NULL)
         return;
-    
-    printf_from_bottom_r(pop->from);
-    printf("%d ", pop->key);
+
+    print_from_bottom(ptr->father);
+    printf("%d ", ptr->key);
 }
 
-void free_queue_r(struct queue_r *to_free){
-    if(to_free == NULL)
+void free_queue(){
+    if(head == NULL)
         return;
-    
-    while(to_free != NULL){
-        struct queue_r *tmp = to_free->next;
-        free(to_free);
-        to_free = tmp;
+
+    while(head != NULL){
+        struct queue *ptr = head->next;
+        free(head);
+        head = ptr;
     }
 
-    head_r = NULL;
-    bottom_r = NULL;
-}
-
-unsigned int hash(int key){
-    const unsigned int seed = 42;
-    const unsigned int m = 0x5bd1e995;
-    const int r = 24;
-
-    unsigned int h = seed ^ sizeof(key);
-    key *= m;
-    key ^= key >> r;
-    key *= m;
-    h*= m;
-    h ^= key;
-
-    return h % STATIONS;
-}
-
-void prep_command(){
-    while (getchar() != '\n');
+    head = NULL;
+    bottom = NULL;
 }

@@ -2,8 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define HASH 49999
-#define BUFFER 8192
+#define HASH 79999
+#define BUFFER 65536
+#define BREAK 452 //21
 
 struct car{
     int range, count;
@@ -61,25 +62,25 @@ void pianifica_percorso();
 void left_to_right(struct station*, struct station*);
 void right_to_left(struct station*, struct station*);
 void print_from_bottom(struct queue*);
-void free_queue(struct queue*);
+void free_queue();
 
 void set_command(){
     while(getchar() != '\n');
 }
 
-// void printf_buffer(){
-//     printf("BUFFER:\n");
-//     for(int i = 0; i < buffer.load; i++)
-//         printf("  -key: %d\trange: %d\tindex: %d\n", buffer.arr[i]->key, buffer.arr[i]->range, buffer.arr[i]->index);
-//     printf("\n");
-// }
+void print_buffer(){
+    printf("BUFFER:\n");
+    for(int i = 0; i < buffer.load; i++)
+        printf("  -key: %d\trange: %d\tindex: %d\n", buffer.arr[i]->key, buffer.arr[i]->range, buffer.arr[i]->index);
+    printf("\n");
+}
 
-// void print_list(){
-//     printf("LIST:\n");
-//     for(struct station *tmp = tail; tmp != NULL; tmp = tmp->prev)
-//         printf("  -key: %d\trange: %d\n", tmp->key, tmp->range);
-//     printf("\n");
-// }
+void print_list(){
+    printf("LIST:\n");
+    for(struct station *tmp = tail; tmp != NULL; tmp = tmp->prev)
+        printf("  -key: %d\trange: %d\n", tmp->key, tmp->range);
+    printf("\n");
+}
 
 int main(){
     table = (struct station **) calloc(HASH, sizeof(struct station *));
@@ -92,6 +93,7 @@ int main(){
     bottom = NULL;
 
     char command[20];
+    int i = 1;
     while(fscanf(stdin, "%s", command) != EOF){
         switch(command[12]){
             case 'z': aggiungi_stazione();
@@ -102,12 +104,15 @@ int main(){
                 break;
             case '\0': rottama_auto();
                 break;
-            case 'r': pianifica_percorso();
-                //print_buffer();
+            case 'r': //print_buffer();
+                pianifica_percorso();
                 //print_list();
                 break;
         }
+        if(i == BREAK)
+            print_list();
         set_command();
+        i++;
     }
 
     return 0;
@@ -249,37 +254,40 @@ void clear_buffer(){
 }
 
 struct station* remove_max(){
-    struct station *max = buffer.arr[0];
+    struct station  *max = buffer.arr[0];
+
     buffer.load--;
     swap_elem(0, buffer.load);
-    
+
     delete_heapfy(0);
     return max;
 }
 
-void delete_heapfy(int index){
-    struct station *left, *right;
-    struct station *max = buffer.arr[index];
+void delete_heapfy(int pos){
+    struct station *left;
+    struct station *right;
+    struct station *max = buffer.arr[pos];
 
-    if(index * 2 + 1 < buffer.load)
-        left = buffer.arr[index * 2 + 1];
+    if(pos * 2 + 1 < buffer.load)
+        left = buffer.arr[pos * 2 + 1];
     else left = NULL;
-
-    if(index * 2 + 2 < buffer.load)
-        right = buffer.arr[index * 2 + 1];
+    
+    if(pos * 2 + 2 < buffer.load)
+        right =  buffer.arr[pos * 2 + 2];
     else right = NULL;
 
     if(left != NULL && left->key > max->key)
         max = left;
+    
     if(right != NULL && right->key > max->key)
         max = right;
-
-    if(max == buffer.arr[index])
-        return;
     
-    int next = max->index;
-    swap_elem(max->index, index);
-    delete_heapfy(next);
+    if(max->key == buffer.arr[pos]->key)
+        return;
+
+    int index = max->index;
+    swap_elem(max->index, pos);
+    delete_heapfy(index);
 }
 
 void add_car(struct station *ptr, int range){
@@ -414,6 +422,10 @@ void aggiungi_auto(){
     }
 
     add_car(ptr, range);
+
+    if(range > ptr->range)
+        ptr->range = range;
+
     printf("aggiunta\n");
 }
 
@@ -452,11 +464,8 @@ void rottama_auto(){
     while(car != NULL){
         if(car->range == range){
             car->count--;
-            if(car->count == 0){
+            if(car->count == 0)
                 remove_node(ptr, father, car);
-                if(ptr->range == range)
-                    ptr->range = max_range(ptr);
-            }
             printf("rottamata\n");
             return;
         }
@@ -472,6 +481,8 @@ void remove_node(struct station *ptr, struct car *father, struct car *car) {
     if (ptr == NULL || car == NULL)
         return;
 
+    int range = car->range;
+
     if (car->left == NULL || car->right == NULL) {
         struct car *child = (car->left != NULL) ? car->left : car->right;
 
@@ -485,6 +496,8 @@ void remove_node(struct station *ptr, struct car *father, struct car *car) {
         }
 
         free(car);
+        if(range == ptr->range)
+            ptr->range = max_range(ptr);
         return;
     }
 
@@ -505,6 +518,9 @@ void remove_node(struct station *ptr, struct car *father, struct car *car) {
         successor_parent->left = successor->right;
 
     free(successor);
+    
+    if(range == ptr->range)
+        ptr->range = max_range(ptr);
 }
 
 int max_range(struct station *ptr){
@@ -520,7 +536,7 @@ int max_range(struct station *ptr){
 
 void pianifica_percorso(){
     int from, to;
-    if(fscanf(stdin, "%d %d", &from, &to) == NULL)
+    if(fscanf(stdin, "%d %d", &from, &to) == EOF)
         return;
 
     int km = to - from;
@@ -532,17 +548,19 @@ void pianifica_percorso(){
         return;
     }
 
-    if(start == end || start->key >= abs(km)){
+    if(start == end || start->range >= abs(km)){
         printf("%d %d\n", start->key, end->key);
         return;
     }
+
+    clear_buffer();
 
     if(km > 0)
         left_to_right(start, end);
     else
         right_to_left(start, end);
 
-    free_queue(head);
+    free_queue();
 }
 
 void left_to_right(struct station *start, struct station *end){
@@ -552,7 +570,7 @@ void left_to_right(struct station *start, struct station *end){
     head->range = start->range;
 
     struct queue *pop = head;
-    struct station *tmp = head;
+    struct station *tmp = start->next;
     while(pop != NULL && tmp != NULL && tmp != end){
         if(pop->key + pop->range < tmp->key){
             pop = pop->next;
@@ -575,6 +593,8 @@ void left_to_right(struct station *start, struct station *end){
 
         tmp = tmp->next;
     }
+
+    // print_from_bottom(bottom);
     printf("nessun percorso\n");
 }
 
@@ -589,7 +609,7 @@ void right_to_left(struct station *start, struct station *end){
     struct station *tmp = start;
     while(pop != NULL && tmp != NULL && tmp != end){
         if(pop->key - pop->range > tmp->key){
-            pop = pop->range;
+            pop = pop->next;
             continue;
         }
 
@@ -608,18 +628,19 @@ void right_to_left(struct station *start, struct station *end){
         tmp = tmp->prev;
     }
 
-    if(bottom->key - bottom->range > end->range){
+    if(bottom->key - bottom->range > end->key){
+        // print_from_bottom(bottom);
         printf("nessun percorso\n");
         return;
     }
 
-    while(pop != NULL && tmp != NULL && tmp != end){
+    while(pop != NULL && tmp != NULL && pop != bottom && tmp->key != end->key){
         if(pop->key - pop->range > tmp->key){
             pop = pop->next;
             continue;
         }
 
-        if(tmp->key - tmp->range <= end->range && pop->step + 1 <= bottom->step){
+        if(tmp->key - tmp->range <= end->key && pop->step + 1 <= bottom->step){
             bottom->key = tmp->key;
             bottom->range = tmp->range;
             bottom->father = pop;
@@ -637,7 +658,7 @@ void right_to_left(struct station *start, struct station *end){
                 son->father = pop;
         }
 
-        son = father;
+        son = son->father;
         father = father->father;
     }
 
@@ -651,4 +672,18 @@ void print_from_bottom(struct queue *ptr){
 
     print_from_bottom(ptr->father);
     printf("%d ", ptr->key);
+}
+
+void free_queue(){
+    if(head == NULL)
+        return;
+
+    while(head != NULL){
+        struct queue *ptr = head->next;
+        free(head);
+        head = ptr;
+    }
+
+    head = NULL;
+    bottom = NULL;
 }
