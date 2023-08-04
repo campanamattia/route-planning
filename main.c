@@ -3,7 +3,8 @@
 #include <string.h>
 
 #define HASH 79999
-#define BUFFER 65536  	
+#define BUFFER 65536
+// #define BREAK 11469 //88
 
 struct car{
     int range, count;
@@ -48,6 +49,7 @@ void add_car(struct station*, int);
 void demolisci_stazione();
 struct station* find_previous(int);
 void free_car(struct car*);
+void remove_from_list(struct station*);
 void remove_pos(struct station *);
 
 void aggiungi_auto();
@@ -67,20 +69,28 @@ void set_command(){
     while(getchar() != '\n');
 }
 
-void print_buffer(){
-    printf("BUFFER:\n");
-    for(int i = 0; i < buffer.load; i++)
-        printf("  -key: %d\trange: %d\tindex: %d\n", buffer.arr[i]->key, buffer.arr[i]->range, buffer.arr[i]->index);
-    printf("\n");
-}
+// void print_buffer(){
+//     printf("BUFFER:\n");
+//     for(int i = 0; i < buffer.load; i++)
+//         printf("  -key: %d\trange: %d\tindex: %d\n", buffer.arr[i]->key, buffer.arr[i]->range, buffer.arr[i]->index);
+//     printf("\n");
+// }
 
-void print_list(){
-    printf("LIST:\n");
-    for(struct station *tmp = tail; tmp != NULL; tmp = tmp->prev)
-        printf("  -key: %d\trange: %d\n", tmp->key, tmp->range);
-    printf("\n");
-}
+// void print_list(){
+//     printf("LIST:\n");
+//     for(struct station *tmp = tail; tmp != NULL; tmp = tmp->prev)
+//         printf("  -key: %d\trange: %d\n", tmp->key, tmp->range);
+//     printf("\n");
+// }
 
+// void print_queue(){
+//     printf("QUEUE:\n");
+//     for(struct queue *tmp = head; tmp != NULL; tmp = tmp->next)
+//         printf("  -key: %d\trange: %d\tfather: %d\tstep: %d\n", tmp->key, tmp->range, ((tmp->father != NULL) ? tmp->father->key : 0), tmp->step);
+//     printf("\n");
+// }
+
+// int print = 1;
 int main(){
     table = (struct station **) calloc(HASH, sizeof(struct station *));
 
@@ -102,11 +112,10 @@ int main(){
                 break;
             case '\0': rottama_auto();
                 break;
-            case 'r': //print_buffer();
-                pianifica_percorso();
-                //print_list();
+            case 'r': pianifica_percorso();
                 break;
         }
+        // print++;
         set_command();
     }
 
@@ -206,6 +215,7 @@ void clear_buffer(){
     if(buffer.load <= 0)
         return;
 
+    // print_buffer();
     struct station *list = tail;
     while(buffer.load > 0){
         struct station *elem = remove_max();
@@ -213,39 +223,49 @@ void clear_buffer(){
             //something wrong
             continue;
         elem->index = -1;
-        if(list == NULL){
-            list = elem;
+
+        if(tail == NULL){
             tail = elem;
+            list = elem;
             continue;
         }
 
-        while(list != NULL && list->prev != NULL){
-            if(list->key < elem->key)
-                break;
-            
+        struct station *next = list->next;
+        while(list != NULL && list->key > elem->key){
+            next = list;
             list = list->prev;
         }
 
-        if(list->key < elem->key){
-            if(list == tail){
-                list->next = elem;
-                elem->prev = list;
-                tail = elem;
-                list = elem;
-                continue;
-            }
-            elem->next = list->next;
+        if(list == tail && list->key < elem->key){
+            list->next = elem;
             elem->prev = list;
-
-            elem->next->prev = elem;
-            elem->prev->next = elem;
+            tail = elem;
             list = elem;
             continue;
         }
 
-        list->prev = elem;
-        elem->next = list;
+        if(list != NULL &&list->key < elem->key){
+            list->next = elem;
+            next->prev = elem;
+
+            elem->next = next;
+            elem->prev = list;
+            list = elem;
+            continue;
+        }
+
+        if(list == NULL && next != NULL && next->key > elem->key){
+            next->prev = elem;
+            elem->next = next;
+            list = elem;
+            continue;
+        }
+
+        //something wrong
+        printf("something wrong");
     }
+
+    // print_list();
 }
 
 struct station* remove_max(){
@@ -304,7 +324,7 @@ void add_car(struct station *ptr, int range){
             if(car->right == NULL){
                 car->right = (struct car*) calloc(1, sizeof(struct car));
                 car->right->range = range;
-                car->count = 1;
+                car->right->count = 1;
                 return;
             }
             car = car->right;
@@ -353,18 +373,10 @@ void demolisci_stazione() {
     if (car != NULL)
         free_car(car);
 
-    if (ptr->index == -1) {
-        if (tail == ptr) {
-            tail = ptr->prev;
-            tail->next = NULL;
-        } else {
-            ptr->next->prev = ptr->prev;
-            if (ptr->prev != NULL)
-                ptr->prev->next = ptr->next;
-        }
-    } else {
+    if(ptr->index == -1)
+        remove_from_list(ptr);
+    else
         remove_pos(ptr);
-    }
 
     free(ptr);
     printf("demolita\n");
@@ -396,12 +408,37 @@ void free_car(struct car *car){
     free(car);
 }
 
+void remove_from_list(struct station *ptr){
+    if(ptr == tail){
+        if(ptr->prev != NULL)
+            ptr->prev->next = NULL;
+        tail = ptr->prev;
+        return;
+    }
+
+    if(ptr->next != NULL && ptr->prev != NULL){
+        struct station *next = ptr->next;
+        struct station *prev = ptr->prev;
+
+        prev->next = ptr->next;
+        next->prev = ptr->prev;
+        return;
+    }
+
+    if(ptr->prev == NULL){
+        struct station *next = ptr->next;
+        next->prev = NULL;
+        return;
+    }
+}
+
 void remove_pos(struct station *elem){
     buffer.load--;
     if(elem->index == buffer.load)
         return;
     int index = elem->index;
     swap_elem(index, buffer.load);
+    insert_heapfy(index);
     delete_heapfy(index);
 }
 
@@ -519,13 +556,13 @@ void remove_node(struct station *ptr, struct car *father, struct car *car) {
 }
 
 int max_range(struct station *ptr){
-    if(ptr->parking == NULL)
+    if(ptr == NULL || ptr->parking == NULL)
         return 0;
-
+    
     struct car *car = ptr->parking;
     while(car->right != NULL)
         car = car->right;
-
+    
     return car->range;
 }
 
@@ -555,6 +592,8 @@ void pianifica_percorso(){
     else
         right_to_left(start, end);
 
+    // if(print == BREAK)
+    //     print_queue();
     free_queue();
 }
 
@@ -654,7 +693,7 @@ void right_to_left(struct station *start, struct station *end){
         }
 
         son = son->father;
-        father = father->father;
+        father = son->father;
     }
 
     print_from_bottom(bottom);
