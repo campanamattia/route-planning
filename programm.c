@@ -3,7 +3,7 @@
 #include <string.h>
 
 #define HASH 79999
-#define BUFFER 65536
+#define BUFFER 131072
 // #define BREAK 11469 //88
 
 struct car{
@@ -22,18 +22,17 @@ struct buffer{
     struct station **arr;
     int load;
 };
-
-struct queue{
+struct helper{
     int key, range, step;
-    struct queue *father, *next;
+    struct helper *father, *next;
 };
 
 struct station **table;
 struct buffer buffer;
 struct station *tail;
 
-struct queue *head;
-struct queue *bottom;
+struct helper *head;
+struct helper *bottom;
 
 void aggiungi_stazione();
 struct station* allocate(int);
@@ -61,9 +60,10 @@ int max_range(struct station*);
 
 void pianifica_percorso();
 void left_to_right(struct station*, struct station*);
+void print_from_bottom(struct helper*);
 void right_to_left(struct station*, struct station*);
-void print_from_bottom(struct queue*);
-void free_queue();
+void print_from_head(struct helper*);
+void free_helper();
 
 void set_command(){
     while(getchar() != '\n');
@@ -85,7 +85,7 @@ void set_command(){
 
 // void print_queue(){
 //     printf("QUEUE:\n");
-//     for(struct queue *tmp = head; tmp != NULL; tmp = tmp->next)
+//     for(struct helper *tmp = head; tmp != NULL; tmp = tmp->next)
 //         printf("  -key: %d\trange: %d\tfather: %d\tstep: %d\n", tmp->key, tmp->range, ((tmp->father != NULL) ? tmp->father->key : 0), tmp->step);
 //     printf("\n");
 // }
@@ -594,16 +594,16 @@ void pianifica_percorso(){
 
     // if(print == BREAK)
     //     print_queue();
-    free_queue();
+    free_helper();
 }
 
 void left_to_right(struct station *start, struct station *end){
-    head = (struct queue*) calloc(1, sizeof(struct queue));
+    head = (struct helper*) calloc(1, sizeof(struct helper));
     bottom = head;
     head->key = start->key;
     head->range = start->range;
 
-    struct queue *pop = head;
+    struct helper *pop = head;
     struct station *tmp = start->next;
     while(pop != NULL && tmp != NULL && tmp != end){
         if(pop->key + pop->range < tmp->key){
@@ -611,7 +611,7 @@ void left_to_right(struct station *start, struct station *end){
             continue;
         }
 
-        struct queue *elem = (struct queue*) calloc(1, sizeof(struct queue));
+        struct helper *elem = (struct helper*) calloc(1, sizeof(struct helper));
         elem->key = tmp->key;
         elem->range = tmp->range;
         elem->father = pop;
@@ -632,75 +632,7 @@ void left_to_right(struct station *start, struct station *end){
     printf("nessun percorso\n");
 }
 
-void right_to_left(struct station *start, struct station *end){
-    head = (struct queue*) calloc(1, sizeof(struct queue));
-    bottom = head;
-    head->key = start->key;
-    head->range = start->range;
-    head->step = 0;
-
-    struct queue *pop = head;
-    struct station *tmp = start;
-    while(pop != NULL && tmp != NULL && tmp != end){
-        if(pop->key - pop->range > tmp->key){
-            pop = pop->next;
-            continue;
-        }
-
-        struct queue *elem = (struct queue*) calloc(1, sizeof(struct queue));
-        elem->key = tmp->key;
-        elem->range = tmp->range;
-        elem->father = pop;
-        elem->step = pop->step + 1;
-
-        bottom->next = elem;
-        bottom = elem;
-
-        if(bottom->key - bottom->range <= end->key)
-            break;
-        
-        tmp = tmp->prev;
-    }
-
-    if(bottom->key - bottom->range > end->key){
-        // print_from_bottom(bottom);
-        printf("nessun percorso\n");
-        return;
-    }
-
-    while(pop != NULL && tmp != NULL && pop != bottom && tmp->key != end->key){
-        if(pop->key - pop->range > tmp->key){
-            pop = pop->next;
-            continue;
-        }
-
-        if(tmp->key - tmp->range <= end->key && pop->step + 1 <= bottom->step){
-            bottom->key = tmp->key;
-            bottom->range = tmp->range;
-            bottom->father = pop;
-            bottom->step = pop->step +1;
-        }
-
-        tmp = tmp->prev;
-    }
-
-    struct queue *son = bottom;
-    struct queue *father = bottom->father;
-    while(father != NULL){
-        for(pop = father->next; father->step == pop->step && pop != son; pop = pop->next){
-            if(pop->key - pop->range <= son->key)
-                son->father = pop;
-        }
-
-        son = son->father;
-        father = son->father;
-    }
-
-    print_from_bottom(bottom);
-    printf("%d\n", end->key);
-}
-
-void print_from_bottom(struct queue *ptr){
+void print_from_bottom(struct helper *ptr){
     if(ptr == NULL)
         return;
 
@@ -708,12 +640,86 @@ void print_from_bottom(struct queue *ptr){
     printf("%d ", ptr->key);
 }
 
-void free_queue(){
+void right_to_left(struct station *start, struct station *end){
+    // print_list();
+    head = (struct helper*) calloc(1, sizeof(struct helper));
+    bottom = head;
+    head->key = start->key;
+    head->range = start->range;
+    head->step = 0;
+
+    struct helper *pop = head;
+    struct helper *stop = head;
+    struct station *tmp = start;
+    while(pop != NULL && tmp != NULL && tmp->key != end->key){
+        if(pop->key - pop->range > tmp->key){
+            if(pop->next != NULL && pop->next->step == pop->step){
+                pop = pop->next;
+                continue;
+            }
+            else if(head != stop){
+                stop = head;
+                pop = head;
+                continue;
+            } else 
+                break;
+        }
+
+        struct helper *elem = (struct helper*) calloc(1, sizeof(struct helper));
+        elem->key = tmp->key;
+        elem->range = tmp->range;
+        elem->father = pop;
+        elem->step = pop->step + 1;
+
+        elem->next = head;
+        head = elem;
+
+        if(head->key - head->range <= end->key)
+            break;
+        
+        tmp = tmp->prev;
+    }
+
+    if(head->key - head->range > end->key){
+        // print_from_bottom(bottom);
+        printf("nessun percorso\n");
+        return;
+    }
+
+    stop = pop->father;
+    while(pop != NULL && tmp != NULL && tmp->key != end->key){
+        if(pop->key - pop->range > tmp->key){
+            if(pop->step + 1 == stop->step)
+                break;
+            pop = pop->next;
+            continue;
+        }
+
+        if(tmp->key - tmp->range <= end->key){
+            head->key = tmp->key;
+            head->father = pop;
+        }
+
+        tmp = tmp->prev;
+    }
+
+    print_from_head(head);
+    printf("%d\n", end->key);
+}
+
+void print_from_head(struct helper *ptr){
+    if(ptr == NULL)
+        return;
+    print_from_head(ptr->father);
+    printf("%d ", ptr->key);
+}
+
+void free_helper(){
     if(head == NULL)
         return;
 
     while(head != NULL){
-        struct queue *ptr = head->next;
+        struct helper *ptr = head->next;
         free(head);
         head = ptr;
     }

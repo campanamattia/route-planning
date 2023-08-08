@@ -4,7 +4,6 @@
 
 #define HASH 79999
 #define BUFFER 65536
-// #define BREAK 11469 //88
 
 struct car{
     int range, count;
@@ -69,28 +68,6 @@ void set_command(){
     while(getchar() != '\n');
 }
 
-// void print_buffer(){
-//     printf("BUFFER:\n");
-//     for(int i = 0; i < buffer.load; i++)
-//         printf("  -key: %d\trange: %d\tindex: %d\n", buffer.arr[i]->key, buffer.arr[i]->range, buffer.arr[i]->index);
-//     printf("\n");
-// }
-
-// void print_list(){
-//     printf("LIST:\n");
-//     for(struct station *tmp = tail; tmp != NULL; tmp = tmp->prev)
-//         printf("  -key: %d\trange: %d\n", tmp->key, tmp->range);
-//     printf("\n");
-// }
-
-// void print_queue(){
-//     printf("QUEUE:\n");
-//     for(struct queue *tmp = head; tmp != NULL; tmp = tmp->next)
-//         printf("  -key: %d\trange: %d\tfather: %d\tstep: %d\n", tmp->key, tmp->range, ((tmp->father != NULL) ? tmp->father->key : 0), tmp->step);
-//     printf("\n");
-// }
-
-// int print = 1;
 int main(){
     table = (struct station **) calloc(HASH, sizeof(struct station *));
 
@@ -115,7 +92,6 @@ int main(){
             case 'r': pianifica_percorso();
                 break;
         }
-        // print++;
         set_command();
     }
 
@@ -215,12 +191,10 @@ void clear_buffer(){
     if(buffer.load <= 0)
         return;
 
-    // print_buffer();
     struct station *list = tail;
     while(buffer.load > 0){
         struct station *elem = remove_max();
         if(elem == NULL)
-            //something wrong
             continue;
         elem->index = -1;
 
@@ -261,11 +235,9 @@ void clear_buffer(){
             continue;
         }
 
-        //something wrong
         printf("something wrong");
     }
 
-    // print_list();
 }
 
 struct station* remove_max(){
@@ -342,8 +314,6 @@ void add_car(struct station *ptr, int range){
             continue;
         }
     }
-
-    printf("i didn't add the car, i don't know why");
 }
 
 void demolisci_stazione() {
@@ -592,8 +562,6 @@ void pianifica_percorso(){
     else
         right_to_left(start, end);
 
-    // if(print == BREAK)
-    //     print_queue();
     free_queue();
 }
 
@@ -628,7 +596,6 @@ void left_to_right(struct station *start, struct station *end){
         tmp = tmp->next;
     }
 
-    // print_from_bottom(bottom);
     printf("nessun percorso\n");
 }
 
@@ -663,7 +630,6 @@ void right_to_left(struct station *start, struct station *end){
     }
 
     if(bottom->key - bottom->range > end->key){
-        // print_from_bottom(bottom);
         printf("nessun percorso\n");
         return;
     }
