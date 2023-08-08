@@ -152,17 +152,18 @@ void aggiungi_stazione(){
 }
 
 struct station* allocate (int key){
-    struct station *elem = table[hash(key)];
+    int index = hash(key);
+    struct station *elem = table[index];
 
     if(elem == NULL){
         elem = (struct station*) calloc(1, sizeof(struct station));
         elem->key = key;
-        table[hash(key)] = elem;
+        table[index] = elem;
         return elem;
     }
 
     struct station *prev = NULL;
-    while(elem != NULL){
+    while(elem != NULL && !(elem->key < key)){
         if(elem->key == key)
             return NULL;
 
@@ -170,9 +171,18 @@ struct station* allocate (int key){
         elem = elem->sib;
     }
 
-    prev->sib = (struct station*) calloc(1, sizeof(struct station));
-    prev->sib->key = key;
-    return prev->sib;
+    if(prev == NULL){
+        table[index] = (struct station*) calloc(1, sizeof(struct station));
+        table[index]->sib = elem;
+        elem = table[index];
+    } else {
+        elem = (struct station*) calloc(1, sizeof(struct station));
+        elem->sib = prev->sib;
+        prev->sib = elem;
+    }
+
+    elem->key = key;
+    return elem;
 }
 
 int hash(int key){
@@ -387,7 +397,7 @@ struct station* find_previous(int key) {
     struct station *elem = table[index];
     struct station *prev = NULL;
 
-    while (elem != NULL) {
+    while (elem != NULL && !(elem->key < key)) {
         if (elem->key == key)
             return prev;
 
@@ -465,7 +475,7 @@ struct station* find_station(int key) {
     int index = hash(key);
     struct station *elem = table[index];
 
-    while (elem != NULL) {
+    while (elem != NULL && !(elem->key < key)) {
         if (elem->key == key)
             return elem;
 
