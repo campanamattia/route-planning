@@ -6,10 +6,10 @@ start_time=$(date +%s)
 # Iterate from 1 to 100
 for ((X=1; X<=111; X++)); do
     # Run the commands with the current value of X
-    ./a.out < "test/open_${X}.txt" > out.txt
+    ./a.out < "test/open_${X}.txt" > "out/my_${X}.txt"
 
     # Suppress the output of the diff command
-    diff out.txt "test/open_${X}.output.txt" > /dev/null
+    diff "out/my_${X}.txt" "test/open_${X}.output.txt" > /dev/null
 
     # Check the exit code of the diff command to see if there are any differences
     if [ $? -eq 0 ]; then

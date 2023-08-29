@@ -2,14 +2,16 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define HASH 79999
-#define BUFFER 65536
+#define HASH 99991
+#define BUFFER 131072
 
+//a struct for saving the car in a binary search tree
 struct car{
     int range, count;
     struct car *right, *left;
 };
 
+//the struct for the station has teh two pointer for the double list and an index fild to find the pointer inside the buffer
 struct station{
     int key, range, index;
     struct car *parking;
@@ -17,22 +19,26 @@ struct station{
     struct station *next, *prev;
 };
 
+//structure used to achieve logarithmic (log n) insertion, since I don't need the stations to be sorted immediately, only when a 'pianifica percorso' is requested
 struct buffer{
     struct station **arr;
     int load;
 };
 
-struct queue{
+//structure used to help me keep track of the stations I have already visited, which I can use to reach others (as queue when from < to and as stack when to < from)
+struct helper{
     int key, range, step;
-    struct queue *father, *next;
+    struct helper *father, *next;
 };
 
+//used as hashtable to accelerate the process of finding a station inside the buffer or the list
 struct station **table;
-struct buffer buffer;
-struct station *tail;
 
-struct queue *head;
-struct queue *bottom;
+struct buffer buffer;
+struct station *tail; //tail because i use a max heap so for the insertion from the buffer to the list i neeed to start from the end of the list
+
+struct helper *head;
+struct helper *bottom;
 
 void aggiungi_stazione();
 struct station* allocate(int);
@@ -60,9 +66,11 @@ int max_range(struct station*);
 
 void pianifica_percorso();
 void left_to_right(struct station*, struct station*);
+void print_from_bottom(struct helper*);
 void right_to_left(struct station*, struct station*);
-void print_from_bottom(struct queue*);
-void free_queue();
+struct helper* pop_next(struct helper*, struct helper**);
+void print_stack(struct helper*);
+void free_helper();
 
 void set_command(){
     while(getchar() != '\n');
@@ -128,17 +136,18 @@ void aggiungi_stazione(){
 }
 
 struct station* allocate (int key){
-    struct station *elem = table[hash(key)];
+    int index = hash(key);
+    struct station *elem = table[index];
 
     if(elem == NULL){
         elem = (struct station*) calloc(1, sizeof(struct station));
         elem->key = key;
-        table[hash(key)] = elem;
+        table[index] = elem;
         return elem;
     }
 
     struct station *prev = NULL;
-    while(elem != NULL){
+    while(elem != NULL && !(elem->key < key)){
         if(elem->key == key)
             return NULL;
 
@@ -146,9 +155,18 @@ struct station* allocate (int key){
         elem = elem->sib;
     }
 
-    prev->sib = (struct station*) calloc(1, sizeof(struct station));
-    prev->sib->key = key;
-    return prev->sib;
+    if(prev == NULL){
+        table[index] = (struct station*) calloc(1, sizeof(struct station));
+        table[index]->sib = elem;
+        elem = table[index];
+    } else {
+        elem = (struct station*) calloc(1, sizeof(struct station));
+        elem->sib = prev->sib;
+        prev->sib = elem;
+    }
+
+    elem->key = key;
+    return elem;
 }
 
 int hash(int key){
@@ -234,10 +252,7 @@ void clear_buffer(){
             list = elem;
             continue;
         }
-
-        printf("something wrong");
     }
-
 }
 
 struct station* remove_max(){
@@ -357,7 +372,7 @@ struct station* find_previous(int key) {
     struct station *elem = table[index];
     struct station *prev = NULL;
 
-    while (elem != NULL) {
+    while (elem != NULL && !(elem->key < key)) {
         if (elem->key == key)
             return prev;
 
@@ -435,7 +450,7 @@ struct station* find_station(int key) {
     int index = hash(key);
     struct station *elem = table[index];
 
-    while (elem != NULL) {
+    while (elem != NULL && !(elem->key < key)) {
         if (elem->key == key)
             return elem;
 
@@ -541,7 +556,6 @@ void pianifica_percorso(){
     if(fscanf(stdin, "%d %d", &from, &to) == EOF)
         return;
 
-    int km = to - from;
     struct station *start = find_station(from);
     struct station *end = find_station(to);
 
@@ -550,28 +564,28 @@ void pianifica_percorso(){
         return;
     }
 
-    if(start == end || start->range >= abs(km)){
+    if(start == end || start->range >= abs(to - from)){
         printf("%d %d\n", start->key, end->key);
         return;
     }
 
     clear_buffer();
 
-    if(km > 0)
+    if(to-from > 0)
         left_to_right(start, end);
     else
         right_to_left(start, end);
 
-    free_queue();
+    free_helper();
 }
 
 void left_to_right(struct station *start, struct station *end){
-    head = (struct queue*) calloc(1, sizeof(struct queue));
+    head = (struct helper*) calloc(1, sizeof(struct helper));
     bottom = head;
     head->key = start->key;
     head->range = start->range;
 
-    struct queue *pop = head;
+    struct helper *pop = head;
     struct station *tmp = start->next;
     while(pop != NULL && tmp != NULL && tmp != end){
         if(pop->key + pop->range < tmp->key){
@@ -579,7 +593,7 @@ void left_to_right(struct station *start, struct station *end){
             continue;
         }
 
-        struct queue *elem = (struct queue*) calloc(1, sizeof(struct queue));
+        struct helper *elem = (struct helper*) calloc(1, sizeof(struct helper));
         elem->key = tmp->key;
         elem->range = tmp->range;
         elem->father = pop;
@@ -599,74 +613,7 @@ void left_to_right(struct station *start, struct station *end){
     printf("nessun percorso\n");
 }
 
-void right_to_left(struct station *start, struct station *end){
-    head = (struct queue*) calloc(1, sizeof(struct queue));
-    bottom = head;
-    head->key = start->key;
-    head->range = start->range;
-    head->step = 0;
-
-    struct queue *pop = head;
-    struct station *tmp = start;
-    while(pop != NULL && tmp != NULL && tmp != end){
-        if(pop->key - pop->range > tmp->key){
-            pop = pop->next;
-            continue;
-        }
-
-        struct queue *elem = (struct queue*) calloc(1, sizeof(struct queue));
-        elem->key = tmp->key;
-        elem->range = tmp->range;
-        elem->father = pop;
-        elem->step = pop->step + 1;
-
-        bottom->next = elem;
-        bottom = elem;
-
-        if(bottom->key - bottom->range <= end->key)
-            break;
-        
-        tmp = tmp->prev;
-    }
-
-    if(bottom->key - bottom->range > end->key){
-        printf("nessun percorso\n");
-        return;
-    }
-
-    while(pop != NULL && tmp != NULL && pop != bottom && tmp->key != end->key){
-        if(pop->key - pop->range > tmp->key){
-            pop = pop->next;
-            continue;
-        }
-
-        if(tmp->key - tmp->range <= end->key && pop->step + 1 <= bottom->step){
-            bottom->key = tmp->key;
-            bottom->range = tmp->range;
-            bottom->father = pop;
-            bottom->step = pop->step +1;
-        }
-
-        tmp = tmp->prev;
-    }
-
-    struct queue *son = bottom;
-    struct queue *father = bottom->father;
-    while(father != NULL){
-        for(pop = father->next; father->step == pop->step && pop != son; pop = pop->next){
-            if(pop->key - pop->range <= son->key)
-                son->father = pop;
-        }
-
-        son = son->father;
-        father = son->father;
-    }
-
-    print_from_bottom(bottom);
-    printf("%d\n", end->key);
-}
-
-void print_from_bottom(struct queue *ptr){
+void print_from_bottom(struct helper *ptr){
     if(ptr == NULL)
         return;
 
@@ -674,12 +621,91 @@ void print_from_bottom(struct queue *ptr){
     printf("%d ", ptr->key);
 }
 
-void free_queue(){
+void right_to_left(struct station *start, struct station *end){
+    head = (struct helper*) calloc(1, sizeof(struct helper));
+    bottom = head;
+    head->key = start->key;
+    head->range = start->range;
+    head->step = 0;
+
+    struct helper *pop = head;
+    struct helper *stop = head;
+    struct station *tmp = start;
+    while(pop != NULL && tmp != NULL && tmp->key != end->key){
+        if(pop->key - pop->range > tmp->key){
+            pop = pop_next(pop, &stop);
+
+            if(pop == NULL)
+                break;
+            continue;
+        }
+
+        struct helper *elem = (struct helper*) calloc(1, sizeof(struct helper));
+        elem->key = tmp->key;
+        elem->range = tmp->range;
+        elem->father = pop;
+        elem->step = pop->step + 1;
+
+        elem->next = head;
+        head = elem;
+
+        if(head->key - head->range <= end->key)
+            break;
+        
+        tmp = tmp->prev;
+    }
+
+    if(head->key - head->range > end->key){
+        printf("nessun percorso\n");
+        return;
+    }
+
+    stop = pop->father;
+    while(pop != NULL && tmp != NULL && tmp->key != end->key){
+        if(pop->key - pop->range > tmp->key){
+            if(pop->step + 1 == stop->step)
+                break;
+            pop = pop->next;
+            continue;
+        }
+
+        if(tmp->key - tmp->range <= end->key){
+            head->key = tmp->key;
+            head->father = pop;
+        }
+
+        tmp = tmp->prev;
+    }
+
+    print_stack(head);
+    printf("%d\n", end->key);
+}
+
+struct helper* pop_next(struct helper *pop, struct helper **stop){
+    if(pop->next != NULL && pop->next->step == pop->step)
+                return pop->next;
+            
+    if(head != *stop){
+        *stop = head;
+        return head;
+    }
+    
+    return NULL;
+}
+
+void print_stack(struct helper *ptr){
+    if(ptr == NULL)
+        return;
+    print_stack(ptr->father);
+    printf("%d ", ptr->key);
+}
+
+void free_helper(){
     if(head == NULL)
         return;
 
     while(head != NULL){
-        struct queue *ptr = head->next;
+        struct helper *ptr = head->next;
         free(head);
         head = ptr;
     }
