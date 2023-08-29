@@ -47,24 +47,24 @@ The space complexity depends on the number of stations inserted (excluding machi
 ### Time Complexity
 
 #### Insertion
-- Time: O(log(n))
+- Time: **&Theta;(log(n))**
 - Description: Stations are inserted into a max heap.
 
 #### Demolition
-- Time: O(1) (if the station has already been transferred to the list)
-- Time: O(log(n)) (if the station is still in the buffer)
+- Time: **&Theta;(1)** (if the station has already been transferred to the list)
+- Time: **&Theta;(log(n))** (if the station is still in the buffer)
 - Description: Stations are removed from the list or the buffer.
 
 #### Adding/Removing Cars
-- Time: O(1)
+- Time: **&Theta;(1)**
 - Description: Stations are accessible via a hash table, and operations on cars take constant time. The maximum number of cars is limited to 512.
 
 #### Route Planning
-- Time: O(n)
+- Time: **&Theta;(n)**
 - Description: The process begins by emptying the buffer into the list in an ordered manner, taking O(n) time. Subsequently, the actual route planning is executed, also in O(n) time.
 
 In summary, the operations of the application have the following time complexities:
-- Insertion: O(log(n))
-- Demolition: O(1) or O(log(n))
-- Adding/Removing Cars: O(1)
-- Route Planning: O(n)
+- Insertion: **&Theta;(log(n))**
+- Demolition: **&Omega;(1)** || **O(log(n))**
+- Adding/Removing Cars: **&Theta;(1)**
+- Route Planning: **&Theta;(n)**
